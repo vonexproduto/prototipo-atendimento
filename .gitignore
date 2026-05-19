@@ -1,0 +1,5 @@
+node_modules/
+scraps/
+.claude/
+.DS_Store
+Thumbs.db

@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>CCM — Atendimento e Conversas</title>
+<link rel="stylesheet" href="design-system/colors_and_type.css">
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css">
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/fill/style.css">
+<style>
+  html, body { height: 100%; margin: 0; }
+  body { background: #f2f6fa; font-family: "Montserrat", sans-serif; color: #28293d; overflow: hidden; }
+  #root { height: 100vh; display: flex; flex-direction: column; }
+  button { font-family: "Montserrat", sans-serif; }
+  *::-webkit-scrollbar { width: 8px; height: 8px; }
+  *::-webkit-scrollbar-thumb { background: rgba(40,41,61,0.15); border-radius: 8px; }
+  *::-webkit-scrollbar-track { background: transparent; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script src="src/tokens.js"></script>
+<script src="src/data.js?v=2"></script>
+<script src="src/demo-router.js"></script>
+<script type="text/babel" src="src/Header.jsx?v=2"></script>
+<script type="text/babel" src="src/QueueSidebar.jsx?v=10"></script>
+<script type="text/babel" src="src/AtendimentosList.jsx?v=12"></script>
+<script type="text/babel" src="src/ConversaPanel.jsx?v=6"></script>
+<script type="text/babel" src="src/AtendimentoDetail.jsx?v=8"></script>
+<script type="text/babel" src="src/JornadasView.jsx?v=2"></script>
+<script type="text/babel" src="src/DashboardView.jsx?v=1"></script>
+
+<script type="text/babel">
+const RAIL_ITEMS = [
+  { id: "chat",       icon: "ph-notepad",  title: "Atendimentos" },
+  { id: "jornadas",  icon: "ph-robot",    title: "Jornadas" },
+  { id: "relatorios", icon: "ph-trend-up", title: "Relatórios" },
+];
+
+const RailIcon = ({ icon, active, onClick, title }) => {
+  const c = window.CCM.c;
+  const [hover, setHover] = React.useState(false);
+  return (
+    <div
+      onClick={onClick}
+      title={title}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{
+        width: 40, height: 40, borderRadius: 10,
+        background: active ? c.primary : hover ? c.primaryLightest : "transparent",
+        color: active ? "#fff" : hover ? c.primary : c.fg2,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        cursor: "pointer", marginBottom: 6,
+        transition: "background 150ms ease, color 150ms ease",
+      }}
+    >
+      <i className={`ph ${icon}`} style={{ fontSize: 20 }} />
+    </div>
+  );
+};
+
+const Rail = ({ active, onSelect }) => {
+  const c = window.CCM.c;
+  return (
+    <aside style={{
+      width: 56, background: "#fff",
+      borderRight: `1px solid ${c.border}`,
+      display: "flex", flexDirection: "column", alignItems: "center",
+      padding: "12px 0", flexShrink: 0,
+    }}>
+      {RAIL_ITEMS.map(it => (
+        <RailIcon
+          key={it.id}
+          icon={it.icon}
+          title={it.title}
+          active={active === it.id}
+          onClick={() => onSelect(it.id)}
+        />
+      ))}
+    </aside>
+  );
+};
+
+const PeekOverlay = ({ children, onClose }) => (
+  <div
+    onClick={onClose}
+    style={{
+      position: "absolute", inset: 0,
+      zIndex: 100,
+      background: "rgba(40,41,61,0.28)",
+      display: "flex", justifyContent: "flex-end",
+      animation: "ccmFadeIn 180ms ease",
+      minHeight: 0,
+    }}
+  >
+    <style>{`
+      @keyframes ccmFadeIn { from { opacity: 0; } to { opacity: 1; } }
+      @keyframes ccmSlideIn { from { transform: translateX(40px); opacity: 0.6; } to { transform: translateX(0); opacity: 1; } }
+    `}</style>
+    <div
+      onClick={e => e.stopPropagation()}
+      style={{
+        width: "78%", maxWidth: 1200, minWidth: 720,
+        height: "100%", minHeight: 0,
+        background: "#fff",
+        boxShadow: "-8px 0 32px rgba(40,41,61,0.18)",
+        display: "flex", flexDirection: "column",
+        overflow: "hidden",
+        animation: "ccmSlideIn 220ms ease",
+      }}
+    >
+      {children}
+    </div>
+  </div>
+);
+
+const App = () => {
+  const D = window.CCM_DATA;
+  const demo = window.CCM_DEMO_STATE || {};
+  const [activeRail, setActiveRail] = React.useState("chat");
+  const [chatTab, setChatTab] = React.useState("atendimentos");
+  const [activeQueue, setActiveQueue] = React.useState("atendimento-cliente");
+  const [openAtendimento, setOpenAtendimento] = React.useState(
+    demo.openAtendimentoId ? { id: demo.openAtendimentoId, mode: "fullscreen" } : null
+  );
+  const [activeNav, setActiveNav] = React.useState("Chat");
+
+  const queue = D.queues.flatMap(q => q.children ? [q, ...q.children] : [q])
+                        .find(q => q.id === activeQueue);
+
+  const handleTabChange = (tab) => {
+    setChatTab(tab);
+    setOpenAtendimento(null);
+  };
+
+  const openPeek = (id) => setOpenAtendimento({ id, mode: "peek" });
+  const expandFullscreen = () => setOpenAtendimento(prev => prev ? { ...prev, mode: "fullscreen" } : null);
+  const closeAtendimento = () => setOpenAtendimento(null);
+
+  const renderContent = () => {
+    if (activeRail === "jornadas") {
+      return <JornadasView />;
+    }
+    if (activeRail === "relatorios") {
+      return <DashboardView />;
+    }
+    const switchQueueAndClose = (id) => { setActiveQueue(id); setOpenAtendimento(null); };
+    const switchAtendimento = (id) => setOpenAtendimento(prev => prev ? { ...prev, id } : { id, mode: "fullscreen" });
+
+    if (openAtendimento?.mode === "fullscreen") {
+      return (
+        <AtendimentoDetail
+          mode="fullscreen"
+          atendimentoId={openAtendimento.id}
+          queue={queue}
+          queues={D.queues}
+          atendimentos={D.atendimentos}
+          onSelectQueue={switchQueueAndClose}
+          onSelectAtendimento={switchAtendimento}
+          onBack={closeAtendimento} />
+      );
+    }
+    return (
+      <React.Fragment>
+        <QueueSidebar
+          activeQueueId={activeQueue}
+          onSelectQueue={setActiveQueue}
+          chatTab={chatTab}
+          onTabChange={handleTabChange}
+        />
+        <AtendimentosList
+          queue={queue}
+          queues={D.queues}
+          onSelectQueue={switchQueueAndClose}
+          onOpenAtendimento={openPeek} />
+        {openAtendimento?.mode === "peek" && (
+          <PeekOverlay onClose={closeAtendimento}>
+            <AtendimentoDetail
+              mode="peek"
+              atendimentoId={openAtendimento.id}
+              queue={queue}
+              queues={D.queues}
+              atendimentos={D.atendimentos}
+              onSelectQueue={switchQueueAndClose}
+              onSelectAtendimento={switchAtendimento}
+              onClose={closeAtendimento}
+              onExpand={expandFullscreen}
+            />
+          </PeekOverlay>
+        )}
+      </React.Fragment>
+    );
+  };
+
+  return (
+    <React.Fragment>
+      <Header active={activeNav} onNav={setActiveNav} />
+      <div style={{ flex: 1, display: "flex", overflow: "hidden", minHeight: 0, position: "relative" }}>
+        <Rail active={activeRail} onSelect={setActiveRail} />
+        {renderContent()}
+      </div>
+    </React.Fragment>
+  );
+};
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>

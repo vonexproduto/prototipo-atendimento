@@ -1,0 +1,1116 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Wireflow — CCM Atendimentos</title>
+<link rel="stylesheet" href="design-system/colors_and_type.css">
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css">
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/fill/style.css">
+<style>
+  :root {
+    --bg-board: #F5F5F7;
+    --bg-header: #ffffff;
+    --brand: #9240FF;
+    --brand-light: #f7f5ff;
+    --brand-lightest: #faf8ff;
+    --fg-1: #28293D;
+    --fg-2: #555770;
+    --fg-3: #8F90A6;
+    --border: #E4E4EB;
+    --border-soft: #f0f0f3;
+    --annot-bg: #FFF8E1;
+    --annot-border: #f1c40f;
+    --shadow-card: 0 4px 12px rgba(40,41,61,0.08);
+    --shadow-pop: 0 8px 24px rgba(40,41,61,0.16);
+    --board-zoom: 1;
+  }
+
+  html, body { margin: 0; padding: 0; height: 100%; }
+  body {
+    font-family: "Montserrat", sans-serif;
+    color: var(--fg-1);
+    background: var(--bg-board);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ─────────────────────────────────────────── */
+  /* Top header                                  */
+  /* ─────────────────────────────────────────── */
+  header.topbar {
+    height: 56px;
+    background: var(--bg-header);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    padding: 0 24px;
+    gap: 24px;
+    flex-shrink: 0;
+    z-index: 100;
+    box-shadow: 0 1px 2px rgba(40,41,61,0.04);
+  }
+  .topbar .title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 700;
+    font-size: 15px;
+    color: var(--fg-1);
+  }
+  .topbar .title i { color: var(--brand); font-size: 20px; }
+  .topbar .meta {
+    font-size: 11px;
+    color: var(--fg-3);
+    display: flex;
+    gap: 14px;
+  }
+  .topbar .meta span b { color: var(--fg-2); font-weight: 600; }
+  .topbar .spacer { flex: 1; }
+  .topbar .actions { display: flex; gap: 8px; align-items: center; }
+  .topbar .actions button, .topbar .actions a {
+    height: 34px;
+    padding: 0 14px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: #fff;
+    color: var(--fg-1);
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    text-decoration: none;
+  }
+  .topbar .actions .primary {
+    background: var(--brand);
+    color: #fff;
+    border-color: var(--brand);
+    box-shadow: 0 2px 6px rgba(146,64,255,0.30);
+  }
+  .topbar .actions button:hover { background: var(--brand-lightest); }
+  .topbar .actions .primary:hover { background: #7a35d6; }
+
+  /* ─────────────────────────────────────────── */
+  /* Toolbar (zoom controls)                     */
+  /* ─────────────────────────────────────────── */
+  .toolbar {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    box-shadow: var(--shadow-pop);
+    padding: 6px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    z-index: 200;
+  }
+  .toolbar button {
+    width: 34px; height: 34px;
+    border: 0; background: transparent;
+    cursor: pointer; border-radius: 999px;
+    color: var(--fg-2);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .toolbar button:hover { background: var(--brand-lightest); color: var(--brand); }
+  .toolbar .zoom-label {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--fg-2);
+    padding: 0 8px;
+    min-width: 44px;
+    text-align: center;
+  }
+  .toolbar .divider { width: 1px; height: 20px; background: var(--border); margin: 0 4px; }
+
+  /* ─────────────────────────────────────────── */
+  /* Main layout                                 */
+  /* ─────────────────────────────────────────── */
+  main {
+    flex: 1;
+    display: flex;
+    min-height: 0;
+  }
+
+  /* Side panel */
+  aside.side-panel {
+    width: 320px;
+    background: #fff;
+    border-right: 1px solid var(--border);
+    overflow-y: auto;
+    flex-shrink: 0;
+    padding: 20px;
+  }
+  aside.side-panel h3 {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--fg-3);
+    margin: 0 0 12px;
+    font-weight: 700;
+  }
+  aside.side-panel .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 12px;
+    color: var(--fg-2);
+    padding: 6px 0;
+  }
+  aside.side-panel .legend-item .swatch-arrow {
+    width: 30px; height: 2px;
+    background: var(--brand);
+    position: relative;
+  }
+  aside.side-panel .legend-item .swatch-arrow::after {
+    content: ""; position: absolute; right: -3px; top: -3px;
+    width: 0; height: 0;
+    border-left: 6px solid var(--brand);
+    border-top: 4px solid transparent;
+    border-bottom: 4px solid transparent;
+  }
+  aside.side-panel .legend-item .swatch-annot {
+    width: 22px; height: 22px;
+    background: var(--annot-bg);
+    border-left: 3px solid var(--annot-border);
+    border-radius: 4px;
+  }
+  aside.side-panel .legend-item .swatch-screen {
+    width: 22px; height: 22px;
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    box-shadow: 0 1px 3px rgba(40,41,61,0.10);
+  }
+  aside.side-panel .screen-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 8px;
+  }
+  aside.side-panel .screen-list a {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    text-decoration: none;
+    font-size: 12px;
+    color: var(--fg-1);
+    cursor: pointer;
+  }
+  aside.side-panel .screen-list a:hover { background: var(--brand-lightest); color: var(--brand); }
+  aside.side-panel .screen-list .num {
+    width: 22px; height: 22px;
+    background: var(--brand-light);
+    color: var(--brand);
+    border-radius: 6px;
+    font-size: 10px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  aside.side-panel hr {
+    border: 0;
+    border-top: 1px solid var(--border-soft);
+    margin: 18px 0;
+  }
+  aside.side-panel .rules-section .rule {
+    background: var(--annot-bg);
+    border-left: 3px solid var(--annot-border);
+    border-radius: 6px;
+    padding: 10px 12px;
+    margin-bottom: 8px;
+    font-size: 11px;
+    color: var(--fg-1);
+    line-height: 1.5;
+  }
+  aside.side-panel .rule .rule-id {
+    font-weight: 700;
+    color: var(--brand);
+    margin-right: 6px;
+  }
+
+  /* Board canvas */
+  .board-scroller {
+    flex: 1;
+    overflow: auto;
+    position: relative;
+    background:
+      linear-gradient(var(--bg-board) 1px, transparent 1px) 0 0 / 32px 32px,
+      linear-gradient(90deg, var(--bg-board) 1px, transparent 1px) 0 0 / 32px 32px,
+      radial-gradient(circle, rgba(40,41,61,0.06) 1px, transparent 1px) 0 0 / 32px 32px;
+  }
+  .board {
+    width: 2600px;
+    height: 2400px;
+    position: relative;
+    transform-origin: top left;
+    transform: scale(var(--board-zoom));
+  }
+
+  /* ─────────────────────────────────────────── */
+  /* Screen card                                 */
+  /* ─────────────────────────────────────────── */
+  .screen {
+    position: absolute;
+    width: 640px;
+    background: #fff;
+    border-radius: 14px;
+    box-shadow: var(--shadow-card);
+    overflow: hidden;
+    border: 1px solid var(--border);
+  }
+  .screen .label {
+    padding: 12px 16px 10px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .screen .label .badge {
+    width: 24px; height: 24px;
+    background: var(--brand-light);
+    color: var(--brand);
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .screen .label .name {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--fg-1);
+  }
+  .screen .label .sub {
+    font-size: 11px;
+    color: var(--fg-3);
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .screen .frame {
+    width: 640px;
+    height: 400px;
+    position: relative;
+    overflow: hidden;
+    background: #f2f6fa;
+  }
+  .screen .frame iframe {
+    width: 1280px;
+    height: 800px;
+    border: 0;
+    transform: scale(0.5);
+    transform-origin: top left;
+    background: #f2f6fa;
+  }
+  .screen .frame::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    box-shadow: inset 0 0 0 1px rgba(40,41,61,0.04);
+  }
+  .screen .frame.open-icon {
+    cursor: pointer;
+  }
+  .screen .open-fullscreen {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: rgba(40,41,61,0.7);
+    color: #fff;
+    border: 0;
+    border-radius: 6px;
+    width: 28px; height: 28px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    opacity: 0;
+    transition: opacity 200ms;
+    z-index: 5;
+    text-decoration: none;
+  }
+  .screen:hover .open-fullscreen { opacity: 1; }
+
+  /* ─────────────────────────────────────────── */
+  /* Annotation card                             */
+  /* ─────────────────────────────────────────── */
+  .annot {
+    position: absolute;
+    width: 260px;
+    background: var(--annot-bg);
+    border-radius: 10px;
+    border-left: 4px solid var(--brand);
+    padding: 12px 14px;
+    box-shadow: var(--shadow-card);
+    font-size: 11px;
+    line-height: 1.5;
+    color: var(--fg-1);
+  }
+  .annot .annot-id {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--brand);
+    margin-bottom: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .annot .annot-title {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--fg-1);
+    margin-bottom: 6px;
+  }
+  .annot .annot-body { color: var(--fg-2); }
+  .annot .annot-body b { color: var(--fg-1); }
+  .annot .tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 8px;
+  }
+  .annot .tags span {
+    font-size: 9px;
+    font-weight: 600;
+    padding: 2px 7px;
+    border-radius: 999px;
+    background: #fff;
+    color: var(--fg-2);
+    border: 1px solid var(--border);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .annot.warn { border-left-color: #f54336; }
+  .annot.warn .annot-id { color: #f54336; }
+  .annot.info { border-left-color: #37B8FB; }
+  .annot.info .annot-id { color: #37B8FB; }
+
+  /* ─────────────────────────────────────────── */
+  /* Section group label                         */
+  /* ─────────────────────────────────────────── */
+  .group-label {
+    position: absolute;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--fg-3);
+    background: #fff;
+    border: 1px solid var(--border);
+    padding: 6px 14px;
+    border-radius: 999px;
+    box-shadow: var(--shadow-card);
+  }
+
+  /* ─────────────────────────────────────────── */
+  /* SVG arrows overlay                          */
+  /* ─────────────────────────────────────────── */
+  svg.arrows {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+  }
+  svg.arrows path {
+    stroke: var(--brand);
+    stroke-width: 2.5;
+    fill: none;
+    stroke-dasharray: 6 5;
+    animation: dash 20s linear infinite;
+  }
+  @keyframes dash {
+    to { stroke-dashoffset: -200; }
+  }
+  svg.arrows .arrow-label {
+    background: #fff;
+  }
+  .arrow-label-html {
+    position: absolute;
+    background: #fff;
+    border: 1.5px solid var(--brand);
+    color: var(--brand);
+    font-size: 10px;
+    font-weight: 700;
+    padding: 4px 10px;
+    border-radius: 999px;
+    box-shadow: var(--shadow-card);
+    white-space: nowrap;
+    transform: translate(-50%, -50%);
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    z-index: 4;
+  }
+
+  /* ─────────────────────────────────────────── */
+  /* Modal for fullscreen preview                */
+  /* ─────────────────────────────────────────── */
+  .modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(40,41,61,0.7);
+    z-index: 300;
+    display: none;
+    align-items: center;
+    justify-content: center;
+  }
+  .modal-backdrop.open { display: flex; }
+  .modal-frame {
+    width: 90vw;
+    height: 88vh;
+    max-width: 1400px;
+    background: #fff;
+    border-radius: 14px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+  .modal-frame header {
+    height: 48px;
+    background: #fff;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    padding: 0 16px;
+    gap: 12px;
+  }
+  .modal-frame header .title {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--fg-1);
+  }
+  .modal-frame header .close {
+    margin-left: auto;
+    background: transparent;
+    border: 0;
+    cursor: pointer;
+    color: var(--fg-2);
+    font-size: 18px;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+  }
+  .modal-frame header .close:hover { background: var(--border-soft); }
+  .modal-frame iframe {
+    flex: 1;
+    border: 0;
+    background: #f2f6fa;
+  }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="title">
+    <i class="ph ph-flow-arrow"></i>
+    Wireflow — CCM Atendimentos (melhoria)
+  </div>
+  <div class="meta">
+    <span><b>Versão:</b> 1.0</span>
+    <span><b>Autor:</b> Paulo Lucas</span>
+    <span><b>Atualizado:</b> 11/05/2026</span>
+  </div>
+  <div class="spacer"></div>
+  <div class="actions">
+    <a href="implementation.md" target="_blank">
+      <i class="ph ph-file-text"></i> implementation.md
+    </a>
+    <a href="CCM Atendimentos.html" target="_blank" class="primary">
+      <i class="ph ph-arrow-square-out"></i> Abrir protótipo
+    </a>
+  </div>
+</header>
+
+<main>
+
+  <!-- ─────────────────────────────────── -->
+  <!-- Side panel                          -->
+  <!-- ─────────────────────────────────── -->
+  <aside class="side-panel">
+
+    <h3>Legenda</h3>
+    <div class="legend-item">
+      <div class="swatch-screen"></div>
+      Tela do protótipo (interativa)
+    </div>
+    <div class="legend-item">
+      <div class="swatch-arrow"></div>
+      Navegação / gatilho
+    </div>
+    <div class="legend-item">
+      <div class="swatch-annot"></div>
+      Anotação / regra
+    </div>
+
+    <hr>
+
+    <h3>Telas (10)</h3>
+    <div class="screen-list">
+      <a onclick="scrollToEl('s-list')"><span class="num">1</span> Lista de atendimentos</a>
+      <a onclick="scrollToEl('s-search')"><span class="num">2</span> Busca global (preview)</a>
+      <a onclick="scrollToEl('s-filters')"><span class="num">3</span> Filtros avançados</a>
+      <a onclick="scrollToEl('s-conv')"><span class="num">4</span> Detalhe · Conversas</a>
+      <a onclick="scrollToEl('s-contato')"><span class="num">5</span> Detalhe · Contato</a>
+      <a onclick="scrollToEl('s-historico')"><span class="num">6</span> Detalhe · Histórico</a>
+      <a onclick="scrollToEl('s-conversa')"><span class="num">7</span> Conversa aberta</a>
+      <a onclick="scrollToEl('s-transfer')"><span class="num">8</span> Modal de transferência</a>
+      <a onclick="scrollToEl('s-empty')"><span class="num">9</span> Estado vazio</a>
+      <a onclick="scrollToEl('s-loading')"><span class="num">10</span> Estado de loading</a>
+    </div>
+
+    <hr>
+
+    <h3>Regras de negócio</h3>
+    <div class="rules-section">
+      <div class="rule"><span class="rule-id">R01</span> Detalhe lateral é overlay — não navega para nova rota. ESC fecha.</div>
+      <div class="rule"><span class="rule-id">R02</span> SLA badge: verde (no prazo), amarelo (próximo), vermelho (atrasado).</div>
+      <div class="rule"><span class="rule-id">R03</span> Busca dispara preview após 2 chars; debounce 250ms.</div>
+      <div class="rule"><span class="rule-id">R04</span> Composer multi-canal: tab ativa define como mensagem é enviada.</div>
+      <div class="rule"><span class="rule-id">R05</span> Transferência de fila pede confirmação + opção de notificar atendentes.</div>
+      <div class="rule"><span class="rule-id">R06</span> Skeleton aparece até 1s. Se demorar mais, mostrar progress bar.</div>
+      <div class="rule"><span class="rule-id">R07</span> Empty state inclui CTA "Criar atendimento manualmente".</div>
+      <div class="rule"><span class="rule-id">R08</span> Tabela tem scroll horizontal em telas &lt; 1366px; coluna Ações sticky.</div>
+    </div>
+  </aside>
+
+  <!-- ─────────────────────────────────── -->
+  <!-- Board                               -->
+  <!-- ─────────────────────────────────── -->
+  <div class="board-scroller" id="board-scroller">
+    <div class="board" id="board">
+
+      <!-- SVG arrows layer -->
+      <svg class="arrows" viewBox="0 0 2600 2400" preserveAspectRatio="none">
+        <defs>
+          <marker id="arrowhead" viewBox="0 0 10 10" refX="9" refY="5"
+                  markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="#9240FF" />
+          </marker>
+        </defs>
+
+        <!-- Lista (60,160 — bottom-right around 700,580) → Search (800,160) -->
+        <path d="M 700 360 C 760 360 760 360 800 360" marker-end="url(#arrowhead)"/>
+
+        <!-- Lista → Filtros (1540,160) — long curve over Search -->
+        <path d="M 700 280 C 1100 80 1300 80 1540 280" marker-end="url(#arrowhead)"/>
+
+        <!-- Lista → Detail Conversas (60,720) — vertical down -->
+        <path d="M 380 580 C 380 620 380 660 380 720" marker-end="url(#arrowhead)"/>
+
+        <!-- Detail Conversas → Detail Contato -->
+        <path d="M 700 920 C 760 920 760 920 800 920" marker-end="url(#arrowhead)"/>
+
+        <!-- Detail Contato → Detail Histórico -->
+        <path d="M 1440 920 C 1500 920 1500 920 1540 920" marker-end="url(#arrowhead)"/>
+
+        <!-- Detail Conversas → Conversa (60,1280) -->
+        <path d="M 380 1140 C 380 1180 380 1220 380 1280" marker-end="url(#arrowhead)"/>
+
+        <!-- Conversa → Transfer Modal -->
+        <path d="M 700 1480 C 760 1480 760 1480 800 1480" marker-end="url(#arrowhead)"/>
+
+        <!-- Lista → Empty (60,1840) - dashed bypass -->
+        <path d="M 60 580 C 20 1000 20 1500 60 1840" marker-end="url(#arrowhead)" stroke-dasharray="3 6" opacity="0.55"/>
+
+        <!-- Empty → Loading -->
+        <path d="M 700 2040 C 760 2040 760 2040 800 2040" marker-end="url(#arrowhead)"/>
+      </svg>
+
+      <!-- Arrow labels (HTML on top of SVG) -->
+      <div class="arrow-label-html" style="left: 750px; top: 360px;">
+        <i class="ph ph-magnifying-glass"></i> focar busca
+      </div>
+      <div class="arrow-label-html" style="left: 1120px; top: 85px;">
+        <i class="ph ph-funnel-simple"></i> clica "Filtros avançados"
+      </div>
+      <div class="arrow-label-html" style="left: 380px; top: 660px;">
+        <i class="ph ph-eye"></i> clica olho na linha
+      </div>
+      <div class="arrow-label-html" style="left: 750px; top: 920px;">
+        clica aba "Contato"
+      </div>
+      <div class="arrow-label-html" style="left: 1490px; top: 920px;">
+        clica aba "Histórico"
+      </div>
+      <div class="arrow-label-html" style="left: 380px; top: 1220px;">
+        clica conversa
+      </div>
+      <div class="arrow-label-html" style="left: 750px; top: 1480px;">
+        clica ícone fila
+      </div>
+      <div class="arrow-label-html" style="left: 750px; top: 2040px;">
+        após delay > 1s
+      </div>
+
+      <!-- Group labels -->
+      <div class="group-label" style="left: 40px; top: 24px;">
+        <i class="ph ph-list"></i> Caminho feliz · listagem
+      </div>
+      <div class="group-label" style="left: 40px; top: 586px;">
+        <i class="ph ph-info"></i> Detalhe do atendimento (overlay)
+      </div>
+      <div class="group-label" style="left: 40px; top: 1146px;">
+        <i class="ph ph-chat-circle"></i> Conversa & ações
+      </div>
+      <div class="group-label" style="left: 40px; top: 1706px;">
+        <i class="ph ph-warning"></i> Estados (loading · vazio)
+      </div>
+
+      <!-- ─────────────────────── -->
+      <!-- TELA 1 — LISTA          -->
+      <!-- ─────────────────────── -->
+      <div class="screen" id="s-list" style="left: 60px; top: 80px;">
+        <div class="label">
+          <div class="badge">1</div>
+          <div class="name">Lista de atendimentos</div>
+          <div class="sub"><i class="ph ph-link-simple"></i> demo=list</div>
+        </div>
+        <div class="frame">
+          <a class="open-fullscreen" onclick="openFullscreen('list', this)" title="Abrir em fullscreen">
+            <i class="ph ph-corners-out"></i>
+          </a>
+          <iframe loading="eager" src="CCM Atendimentos.html?demo=list"></iframe>
+        </div>
+      </div>
+
+      <div class="annot" style="left: 60px; top: 510px;">
+        <div class="annot-id">A01 · sidebar de filas</div>
+        <div class="annot-title">Filtro hierárquico</div>
+        <div class="annot-body">
+          13 filas com sub-filas. Contagem em badge.
+          Fila ativa em <b>roxo</b>. Operação expansível.
+        </div>
+        <div class="tags"><span>UX</span><span>R02</span></div>
+      </div>
+
+      <div class="annot" style="left: 380px; top: 510px;">
+        <div class="annot-id">A02 · tabela</div>
+        <div class="annot-title">Colunas e ações</div>
+        <div class="annot-body">
+          10 colunas. <b>Ações sticky</b> à direita.
+          Hover na linha realça. Olho = ver detalhe.
+        </div>
+        <div class="tags"><span>UX</span><span>R08</span></div>
+      </div>
+
+      <!-- ─────────────────────── -->
+      <!-- TELA 2 — SEARCH         -->
+      <!-- ─────────────────────── -->
+      <div class="screen" id="s-search" style="left: 800px; top: 80px;">
+        <div class="label">
+          <div class="badge">2</div>
+          <div class="name">Busca global (preview)</div>
+          <div class="sub"><i class="ph ph-link-simple"></i> demo=search</div>
+        </div>
+        <div class="frame">
+          <a class="open-fullscreen" onclick="openFullscreen('search', this)" title="Abrir em fullscreen">
+            <i class="ph ph-corners-out"></i>
+          </a>
+          <iframe loading="lazy" src="CCM Atendimentos.html?demo=search"></iframe>
+        </div>
+      </div>
+
+      <div class="annot" style="left: 800px; top: 510px;">
+        <div class="annot-id">A03 · busca</div>
+        <div class="annot-title">Preview ao focar</div>
+        <div class="annot-body">
+          Vazio: mostra <b>buscas recentes</b> (top 3).
+          Digitar: match em CPF, telefone, nome, ID.
+          Highlight em amarelo.
+        </div>
+        <div class="tags"><span>R03</span><span>debounce 250ms</span></div>
+      </div>
+
+      <!-- ─────────────────────── -->
+      <!-- TELA 3 — FILTERS        -->
+      <!-- ─────────────────────── -->
+      <div class="screen" id="s-filters" style="left: 1540px; top: 80px;">
+        <div class="label">
+          <div class="badge">3</div>
+          <div class="name">Filtros avançados</div>
+          <div class="sub"><i class="ph ph-link-simple"></i> demo=filters</div>
+        </div>
+        <div class="frame">
+          <a class="open-fullscreen" onclick="openFullscreen('filters', this)" title="Abrir em fullscreen">
+            <i class="ph ph-corners-out"></i>
+          </a>
+          <iframe loading="lazy" src="CCM Atendimentos.html?demo=filters"></iframe>
+        </div>
+      </div>
+
+      <div class="annot info" style="left: 1540px; top: 510px;">
+        <div class="annot-id">A04 · drawer lateral</div>
+        <div class="annot-title">5 grupos de filtro</div>
+        <div class="annot-body">
+          Data início · Status · Atendentes · SLA · IA.
+          Cada dropdown tem busca + checkboxes (radio em data).
+          Aplicar fecha o drawer.
+        </div>
+        <div class="tags"><span>multi-select</span><span>persiste na URL</span></div>
+      </div>
+
+      <!-- ─────────────────────── -->
+      <!-- TELA 4 — DETAIL CONV    -->
+      <!-- ─────────────────────── -->
+      <div class="screen" id="s-conv" style="left: 60px; top: 720px;">
+        <div class="label">
+          <div class="badge">4</div>
+          <div class="name">Detalhe · Conversas</div>
+          <div class="sub"><i class="ph ph-link-simple"></i> demo=detail-conv</div>
+        </div>
+        <div class="frame">
+          <a class="open-fullscreen" onclick="openFullscreen('detail-conv', this)" title="Abrir em fullscreen">
+            <i class="ph ph-corners-out"></i>
+          </a>
+          <iframe loading="lazy" src="CCM Atendimentos.html?demo=detail-conv"></iframe>
+        </div>
+      </div>
+
+      <div class="annot" style="left: 60px; top: 1150px;">
+        <div class="annot-id">A05 · tabs</div>
+        <div class="annot-title">3 abas no detalhe</div>
+        <div class="annot-body">
+          <b>Conversas</b> (lista) · <b>Contato</b> · <b>Histórico</b>.
+          Aba ativa em pill roxa. Aba persiste durante sessão.
+        </div>
+        <div class="tags"><span>R01</span></div>
+      </div>
+
+      <div class="annot" style="left: 380px; top: 1150px;">
+        <div class="annot-id">A06 · cards de conversa</div>
+        <div class="annot-title">Multi-canal por atendimento</div>
+        <div class="annot-body">
+          Um atendimento pode ter várias conversas em canais diferentes (WhatsApp, email, SMS).
+          Status (Aberta/Finalizada) por conversa.
+        </div>
+        <div class="tags"><span>regra de negócio</span></div>
+      </div>
+
+      <!-- ─────────────────────── -->
+      <!-- TELA 5 — DETAIL CONTATO -->
+      <!-- ─────────────────────── -->
+      <div class="screen" id="s-contato" style="left: 800px; top: 720px;">
+        <div class="label">
+          <div class="badge">5</div>
+          <div class="name">Detalhe · Contato</div>
+          <div class="sub"><i class="ph ph-link-simple"></i> demo=detail-contato</div>
+        </div>
+        <div class="frame">
+          <a class="open-fullscreen" onclick="openFullscreen('detail-contato', this)" title="Abrir em fullscreen">
+            <i class="ph ph-corners-out"></i>
+          </a>
+          <iframe loading="lazy" src="CCM Atendimentos.html?demo=detail-contato"></iframe>
+        </div>
+      </div>
+
+      <div class="annot" style="left: 800px; top: 1150px;">
+        <div class="annot-id">A07 · pessoas no atendimento</div>
+        <div class="annot-title">Mistura contatos e atendentes</div>
+        <div class="annot-body">
+          Atendentes marcados com <b>flag interno</b>.
+          Item com highlight = você. Última mensagem + contador de não-lidas.
+        </div>
+        <div class="tags"><span>permissão</span></div>
+      </div>
+
+      <!-- ─────────────────────── -->
+      <!-- TELA 6 — DETAIL HIST    -->
+      <!-- ─────────────────────── -->
+      <div class="screen" id="s-historico" style="left: 1540px; top: 720px;">
+        <div class="label">
+          <div class="badge">6</div>
+          <div class="name">Detalhe · Histórico</div>
+          <div class="sub"><i class="ph ph-link-simple"></i> demo=detail-historico</div>
+        </div>
+        <div class="frame">
+          <a class="open-fullscreen" onclick="openFullscreen('detail-historico', this)" title="Abrir em fullscreen">
+            <i class="ph ph-corners-out"></i>
+          </a>
+          <iframe loading="lazy" src="CCM Atendimentos.html?demo=detail-historico"></iframe>
+        </div>
+      </div>
+
+      <div class="annot" style="left: 1540px; top: 1150px;">
+        <div class="annot-id">A08 · timeline</div>
+        <div class="annot-title">Histórico completo do contato</div>
+        <div class="annot-body">
+          Mensagens passadas + eventos sistêmicos (transferências, encerramentos).
+          Inclui <b>todos os atendimentos anteriores</b> deste contato, não só o atual.
+        </div>
+        <div class="tags"><span>R01</span><span>backend</span></div>
+      </div>
+
+      <!-- ─────────────────────── -->
+      <!-- TELA 7 — CONVERSA       -->
+      <!-- ─────────────────────── -->
+      <div class="screen" id="s-conversa" style="left: 60px; top: 1280px;">
+        <div class="label">
+          <div class="badge">7</div>
+          <div class="name">Conversa aberta + composer</div>
+          <div class="sub"><i class="ph ph-link-simple"></i> demo=conversa</div>
+        </div>
+        <div class="frame">
+          <a class="open-fullscreen" onclick="openFullscreen('conversa', this)" title="Abrir em fullscreen">
+            <i class="ph ph-corners-out"></i>
+          </a>
+          <iframe loading="lazy" src="CCM Atendimentos.html?demo=conversa"></iframe>
+        </div>
+      </div>
+
+      <div class="annot" style="left: 60px; top: 1710px;">
+        <div class="annot-id">A09 · composer</div>
+        <div class="annot-title">Tabs de canal</div>
+        <div class="annot-body">
+          WhatsApp · WhatsApp Web · RCS · SMS · Torpedo · E-mail.
+          Tab ativa define <b>canal de envio</b>.
+          Custo por mensagem visível à direita.
+        </div>
+        <div class="tags"><span>R04</span><span>billing</span></div>
+      </div>
+
+      <div class="annot" style="left: 380px; top: 1710px;">
+        <div class="annot-id">A10 · toolbar superior</div>
+        <div class="annot-title">5 ações + expandir</div>
+        <div class="annot-body">
+          Marcadores · Contato · Transferir fila · Salvar · <b>Encerrar</b> (verde) · Expandir.
+          Encerrar pede confirmação e motivo.
+        </div>
+        <div class="tags"><span>R05</span><span>R01</span></div>
+      </div>
+
+      <!-- ─────────────────────── -->
+      <!-- TELA 8 — TRANSFER MODAL -->
+      <!-- ─────────────────────── -->
+      <div class="screen" id="s-transfer" style="left: 800px; top: 1280px;">
+        <div class="label">
+          <div class="badge">8</div>
+          <div class="name">Modal · Transferir para fila</div>
+          <div class="sub"><i class="ph ph-link-simple"></i> demo=transfer-modal</div>
+        </div>
+        <div class="frame">
+          <a class="open-fullscreen" onclick="openFullscreen('transfer-modal', this)" title="Abrir em fullscreen">
+            <i class="ph ph-corners-out"></i>
+          </a>
+          <iframe loading="lazy" src="CCM Atendimentos.html?demo=transfer-modal"></iframe>
+        </div>
+      </div>
+
+      <div class="annot" style="left: 800px; top: 1710px;">
+        <div class="annot-id">A11 · modal de transferência</div>
+        <div class="annot-title">Radio + opção de notificar</div>
+        <div class="annot-body">
+          Lista achatada de filas (com sub-filas) com contagem.
+          Por padrão, "Notificar atendentes da fila" marcado.
+          Cancelar fecha sem persistir.
+        </div>
+        <div class="tags"><span>R05</span></div>
+      </div>
+
+      <!-- ─────────────────────── -->
+      <!-- TELA 9 — EMPTY          -->
+      <!-- ─────────────────────── -->
+      <div class="screen" id="s-empty" style="left: 60px; top: 1840px;">
+        <div class="label">
+          <div class="badge">9</div>
+          <div class="name">Estado vazio</div>
+          <div class="sub"><i class="ph ph-link-simple"></i> demo=empty</div>
+        </div>
+        <div class="frame">
+          <a class="open-fullscreen" onclick="openFullscreen('empty', this)" title="Abrir em fullscreen">
+            <i class="ph ph-corners-out"></i>
+          </a>
+          <iframe loading="lazy" src="CCM Atendimentos.html?demo=empty"></iframe>
+        </div>
+      </div>
+
+      <div class="annot" style="left: 60px; top: 2270px;">
+        <div class="annot-id">A12 · empty state</div>
+        <div class="annot-title">Mensagem + CTA</div>
+        <div class="annot-body">
+          Quando fila não tem atendimentos. CTA "Criar atendimento manualmente".
+          Não mostrar quando filtros aplicados → usar variante "Sem resultados".
+        </div>
+        <div class="tags"><span>R07</span><span>variante</span></div>
+      </div>
+
+      <!-- ─────────────────────── -->
+      <!-- TELA 10 — LOADING       -->
+      <!-- ─────────────────────── -->
+      <div class="screen" id="s-loading" style="left: 800px; top: 1840px;">
+        <div class="label">
+          <div class="badge">10</div>
+          <div class="name">Estado de loading</div>
+          <div class="sub"><i class="ph ph-link-simple"></i> demo=loading</div>
+        </div>
+        <div class="frame">
+          <a class="open-fullscreen" onclick="openFullscreen('loading', this)" title="Abrir em fullscreen">
+            <i class="ph ph-corners-out"></i>
+          </a>
+          <iframe loading="lazy" src="CCM Atendimentos.html?demo=loading"></iframe>
+        </div>
+      </div>
+
+      <div class="annot warn" style="left: 800px; top: 2270px;">
+        <div class="annot-id">A13 · skeleton</div>
+        <div class="annot-title">Loading shimmer</div>
+        <div class="annot-body">
+          Skeleton com shimmer (1.4s ease-in-out).
+          Aparecer só após <b>200ms</b> de loading (evita flicker).
+          Após 1s, complementar com progress bar no header.
+        </div>
+        <div class="tags"><span>R06</span><span>perf</span></div>
+      </div>
+
+    </div>
+  </div>
+</main>
+
+<!-- ─────────────────────────────────── -->
+<!-- Zoom toolbar                        -->
+<!-- ─────────────────────────────────── -->
+<div class="toolbar">
+  <button onclick="setZoom(zoom - 0.1)" title="Zoom out">
+    <i class="ph ph-minus"></i>
+  </button>
+  <div class="zoom-label" id="zoom-label">100%</div>
+  <button onclick="setZoom(zoom + 0.1)" title="Zoom in">
+    <i class="ph ph-plus"></i>
+  </button>
+  <div class="divider"></div>
+  <button onclick="setZoom(1)" title="Reset zoom">
+    <i class="ph ph-arrows-counter-clockwise"></i>
+  </button>
+  <button onclick="fitToScreen()" title="Fit to screen">
+    <i class="ph ph-arrows-in-simple"></i>
+  </button>
+  <div class="divider"></div>
+  <button onclick="window.print()" title="Imprimir">
+    <i class="ph ph-printer"></i>
+  </button>
+</div>
+
+<!-- ─────────────────────────────────── -->
+<!-- Fullscreen modal                    -->
+<!-- ─────────────────────────────────── -->
+<div class="modal-backdrop" id="modal" onclick="closeFullscreen(event)">
+  <div class="modal-frame" onclick="event.stopPropagation()">
+    <header>
+      <div class="title" id="modal-title">Tela</div>
+      <button class="close" onclick="closeFullscreen()" title="Fechar (ESC)">
+        <i class="ph ph-x"></i>
+      </button>
+    </header>
+    <iframe id="modal-iframe" src=""></iframe>
+  </div>
+</div>
+
+<script>
+  let zoom = 1;
+  const board = document.getElementById("board");
+  const scroller = document.getElementById("board-scroller");
+  const zoomLabel = document.getElementById("zoom-label");
+
+  function setZoom(z) {
+    zoom = Math.max(0.3, Math.min(2, z));
+    document.documentElement.style.setProperty("--board-zoom", zoom);
+    zoomLabel.textContent = Math.round(zoom * 100) + "%";
+  }
+
+  function fitToScreen() {
+    const sw = scroller.clientWidth;
+    const sh = scroller.clientHeight;
+    const bw = 2600;
+    const bh = 2400;
+    setZoom(Math.min(sw / bw, sh / bh) * 0.95);
+    scroller.scrollTo({ top: 0, left: 0, behavior: "smooth" });
+  }
+
+  function scrollToEl(id) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const boardRect = board.getBoundingClientRect();
+    scroller.scrollTo({
+      left: (rect.left - boardRect.left) / zoom - 100,
+      top: (rect.top - boardRect.top) / zoom - 100,
+      behavior: "smooth",
+    });
+    el.animate(
+      [{ boxShadow: "0 0 0 4px #9240FF" }, { boxShadow: "var(--shadow-card)" }],
+      { duration: 1200, easing: "ease-out" }
+    );
+  }
+
+  const TITLES = {
+    "list": "Tela 1 · Lista de atendimentos",
+    "search": "Tela 2 · Busca global (preview)",
+    "filters": "Tela 3 · Filtros avançados",
+    "detail-conv": "Tela 4 · Detalhe · Conversas",
+    "detail-contato": "Tela 5 · Detalhe · Contato",
+    "detail-historico": "Tela 6 · Detalhe · Histórico",
+    "conversa": "Tela 7 · Conversa aberta + composer",
+    "transfer-modal": "Tela 8 · Modal de transferência",
+    "empty": "Tela 9 · Estado vazio",
+    "loading": "Tela 10 · Estado de loading",
+  };
+
+  function openFullscreen(demo, el) {
+    if (el) { event.stopPropagation(); event.preventDefault(); }
+    document.getElementById("modal-iframe").src = "CCM Atendimentos.html?demo=" + demo;
+    document.getElementById("modal-title").textContent = TITLES[demo] || demo;
+    document.getElementById("modal").classList.add("open");
+  }
+
+  function closeFullscreen(e) {
+    if (e && e.target !== e.currentTarget) return;
+    document.getElementById("modal").classList.remove("open");
+    document.getElementById("modal-iframe").src = "";
+  }
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") closeFullscreen();
+    if (e.ctrlKey && e.key === "0") { e.preventDefault(); setZoom(1); }
+    if (e.ctrlKey && (e.key === "+" || e.key === "=")) { e.preventDefault(); setZoom(zoom + 0.1); }
+    if (e.ctrlKey && e.key === "-") { e.preventDefault(); setZoom(zoom - 0.1); }
+  });
+
+  // Pan with middle/right click drag
+  let isPanning = false, panStart = null;
+  scroller.addEventListener("mousedown", (e) => {
+    if (e.button !== 1 && !(e.button === 0 && e.altKey)) return;
+    e.preventDefault();
+    isPanning = true;
+    panStart = { x: e.clientX, y: e.clientY, sl: scroller.scrollLeft, st: scroller.scrollTop };
+    scroller.style.cursor = "grabbing";
+  });
+  window.addEventListener("mousemove", (e) => {
+    if (!isPanning) return;
+    scroller.scrollLeft = panStart.sl - (e.clientX - panStart.x);
+    scroller.scrollTop = panStart.st - (e.clientY - panStart.y);
+  });
+  window.addEventListener("mouseup", () => {
+    isPanning = false;
+    scroller.style.cursor = "";
+  });
+</script>
+
+</body>
+</html>

@@ -1,0 +1,179 @@
+/* =============================================================
+   Vonex CCM Design System — colors_and_type.css
+   Source of truth: src/app/@theme/style-guide/css-files/colors.scss,
+                    typography.scss, tokens-and-grids.scss
+   ============================================================= */
+
+@font-face {
+  font-family: "Montserrat";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("./fonts/Montserrat-Regular.ttf") format("truetype");
+}
+/* NOTE: only Montserrat-Regular.ttf was available in the codebase.
+   For full weight coverage we fall back to Google Fonts. */
+@import url("https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap");
+
+:root {
+  /* ─────────── BRAND — PRIMARY (Electric Violet) ─────────── */
+  --brand-color-primary-pure:        #9240FF; /* signature CTA */
+  --brand-color-primary-medium:      #8766FF; /* hover / active link */
+  --brand-color-primary-dark-medium: #5F3AE5;
+  --brand-color-primary-dark:        #410293; /* secondary btn text */
+  --brand-color-primary-light:       #D7CCFF; /* secondary btn fill */
+  --brand-color-primary-lightest:    #EBE5FF; /* secondary btn hover */
+
+  /* ─────────── BRAND — SECONDARY (Sky Cyan-Blue) ─────────── */
+  /* spelling note: codebase uses Portuguese "secundary" — preserve */
+  --brand-color-secundary-pure:      #37B8FB; /* info / focus border */
+  --brand-color-secundary-lightest:  #E8F7FF; /* sender bubble bg */
+  --brand-color-secundary-light:     #BFE6FA;
+  --brand-color-secundary-medium:    #3A8FB9; /* sender bubble text */
+  --brand-color-secundary-dark:      #114865;
+
+  /* ─────────── BRAND GRADIENT (Cyan → Violet) ─────────── */
+  --brand-color-gradient-start: #1FF0FF;
+  --brand-color-gradient-end:   #9240FF;
+  --brand-gradient: linear-gradient(90deg, #1FF0FF 0%, #9240FF 100%);
+
+  /* ─────────── BACKGROUNDS ─────────── */
+  --background-color-pure:     #154FA1; /* hero / auth */
+  --background-color-light:    #f2f6fa; /* default app canvas */
+  --background-color-lightest: #ffffff; /* cards / modals */
+
+  /* ─────────── HIGHLIGHT (Magenta Pink) ─────────── */
+  --highlight-color-pure:   #dd2e77;
+  --highlight-color-medium: #ab1654;
+  --highlight-color-light:  #ffd6e7;
+  --highlight-color-dark:   #69002c;
+
+  /* ─────────── NEUTRALS — LOW (foreground) ─────────── */
+  --neutral-color-low-pure:       #28293d; /* primary text */
+  --neutral-color-low-medium:     #555770; /* secondary text */
+  --neutral-color-low-light:      #9091af; /* disabled text */
+  --neutral-color-low-soft-light: #a3a3a3; /* placeholder, label */
+  --neutral-color-low-dark:       #292929; /* strongest emphasis */
+
+  /* ─────────── NEUTRALS — HIGH (surfaces / inverse) ─────────── */
+  --neutral-color-high-pure:       #ffffff;
+  --neutral-color-high-soft-light: #fafbfb; /* disabled input bg */
+  --neutral-color-high-light:      #f1f1f5; /* disabled btn bg */
+  --neutral-color-high-medium:     #d6e1e9; /* card border */
+  --neutral-color-high-dark:       #c7c9d9; /* disabled border */
+
+  /* ─────────── FEEDBACK — SUCCESS ─────────── */
+  --feedback-color-success-pure:     #79c22f;
+  --feedback-color-success-medium:   #4eaf51;
+  --feedback-color-success-light:    #e6f3e5; /* success-box fill */
+  --feedback-color-success-lightest: #ebf8eb;
+  --feedback-color-success-dark:     #104700;
+
+  /* ─────────── FEEDBACK — WARNING / ERROR (Vermilion) ─────────── */
+  --feedback-color-warning-pure:   #f54336;
+  --feedback-color-warning-medium: #ff9993;
+  --feedback-color-warning-light:  #ffdde3;
+  --feedback-color-warning-dark:   #650012;
+
+  /* ─────────── FEEDBACK — HELPER / CAUTION (Amber) ─────────── */
+  --feedback-color-helper-pure:   #f99f18;
+  --feedback-color-helper-medium: #ffb033;
+  --feedback-color-helper-light:  #fff3e0;
+  --feedback-color-helper-dark:   #734700;
+
+  --system-white-background: #f9f9f9;
+
+  /* ─────────── SEMANTIC ALIASES ─────────── */
+  --bg:           var(--background-color-light);
+  --surface:      var(--background-color-lightest);
+  --fg1:          var(--neutral-color-low-pure);
+  --fg2:          var(--neutral-color-low-medium);
+  --fg3:          var(--neutral-color-low-light);
+  --fg-muted:     var(--neutral-color-low-soft-light);
+  --border:       var(--neutral-color-high-medium);
+  --border-soft:  var(--neutral-color-high-light);
+  --border-strong:var(--neutral-color-high-dark);
+  --accent:       var(--brand-color-primary-pure);
+  --accent-hover: var(--brand-color-primary-medium);
+  --accent-soft:  var(--brand-color-primary-light);
+
+  /* ─────────── TYPE FAMILIES ─────────── */
+  --font-sans:    "Montserrat", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-console: "Lucida Console", "Courier New", monospace;
+
+  /* ─────────── SPACING (4px base) ─────────── */
+  --space-xs:  4px;
+  --space-sm:  8px;
+  --space-md:  16px;
+  --space-lg:  24px;
+  --space-xl:  32px;
+  --space-xxl: 40px;
+
+  /* ─────────── RADIUS SCALE ─────────── */
+  --radius-sharp:  0;
+  --radius-chip:   4px;
+  --radius-popover:8px;
+  --radius-input:  12px;   /* default buttons + inputs */
+  --radius-modal:  16px;
+  --radius-card:   20px;   /* signature surface radius */
+  --radius-pill:   26px;
+  --radius-circle: 9999px;
+
+  /* ─────────── ELEVATION ─────────── */
+  --shadow-card:    0 0 10px 0 rgba(40, 41, 61, 0.10);
+  --shadow-popover: 0 4px 20px 0 rgba(0,0,0,0.12), 0 2px 4px 0 rgba(0,0,0,0.12);
+  --shadow-balloon: 0 2px 4px 0 rgba(0, 0, 0, 0.08);
+
+  /* ─────────── LAYOUT TOKENS ─────────── */
+  --main-header-height:   48px;
+  --chat-input-bar-height:80px;
+  --chat-header-height:   44px;
+  --chat-sidebar-width:   65px;
+}
+
+/* =============================================================
+   TYPE SCALE — every value below pulled directly from typography.scss.
+   Letter-spacing is ALWAYS 0; weights default to 500 for headings.
+   ============================================================= */
+
+html, body {
+  font-family: var(--font-sans);
+  color: var(--fg1);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+h1, h2, h3, h4, h5, h6 { letter-spacing: 0; font-weight: 500; margin: 0; }
+
+h1 { font-size: 32px; line-height: 40px; }
+h2 { font-size: 24px; line-height: 32px; }
+h3 { font-size: 20px; line-height: 24px; }
+h3.heading-h3-bold { font-weight: 700; }
+h4 { font-size: 16px; line-height: 20px; }
+h5 { font-size: 14px; line-height: 16px; }
+h6 { font-size: 12px; line-height: 12px; }
+
+/* Body */
+.body-x-small-regular   { font-size: 16px; font-weight: 400; line-height: 24px; }
+.body-x-small-semi-bold { font-size: 16px; font-weight: 600; line-height: 24px; }
+.body-xx-small-regular   { font-size: 14px; font-weight: 400; line-height: 16px; }
+.body-xx-small-medium    { font-size: 14px; font-weight: 500; line-height: 16px; }
+.body-xx-small-semi-bold { font-size: 14px; font-weight: 600; line-height: 16px; }
+.body-xx-small-bold      { font-size: 14px; font-weight: 700; line-height: 16px; }
+.body-xxx-small-medium    { font-size: 12px; font-weight: 500; line-height: 12px; }
+.body-xxx-small-semi-bold { font-size: 12px; font-weight: 600; line-height: 12px; }
+
+/* Caption */
+.caption-xxx-small           { font-size: 10px; font-weight: 400; line-height: 16px; }
+.caption-xxx-small-semi-bold { font-size: 10px; font-weight: 600; line-height: 16px; }
+.caption-xxxx-small           { font-size: 12px; font-weight: 400; line-height: 18px; }
+.caption-xxxx-small-semi-bold { font-size: 12px; font-weight: 600; line-height: 18px; }
+
+/* Link & utility */
+.link-x-small  { font-size: 16px; font-weight: 600; line-height: 24px; text-decoration: underline; color: var(--brand-color-primary-pure); }
+.font-bold     { font-weight: 700 !important; }
+.font-console  { font-family: var(--font-console); }
+
+p { margin: 0; font-size: 14px; line-height: 1.5; color: var(--fg2); }
+code, pre { font-family: var(--font-console); }
