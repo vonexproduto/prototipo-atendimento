@@ -63,3 +63,31 @@ window.CCM.expandQueueLeaves = (queue) => {
   if (queue.children?.length) return new Set(queue.children.map(c => c.id));
   return new Set([queue.id]);
 };
+
+// Cadeia fila→operação pra um atendimento. Top-level leaf (ex.: "Operação
+// de Logística") sem pais devolve a própria entry como fila + operação.
+window.CCM.queueChainForAtendimento = (atendimentoId, queues) => {
+  const leafId = window.CCM.queueOfAtendimento(atendimentoId, queues);
+  if (!leafId) return null;
+  for (const q of queues) {
+    if (q.id === leafId) return { fila: q, operacao: q };
+    if (q.children) {
+      const child = q.children.find(ch => ch.id === leafId);
+      if (child) return { fila: child, operacao: q };
+    }
+  }
+  return null;
+};
+
+// Converte slaTag ("-1d", "+3h", "-30m") em minutos pra ordenação.
+// Negativo = atrasado. Mais negativo = mais atrasado.
+window.CCM.slaTagToMinutes = (tag) => {
+  if (!tag) return Number.MAX_SAFE_INTEGER;
+  const sign = tag[0] === "-" ? -1 : 1;
+  const m = tag.slice(1).match(/^(\d+)([hmd])$/);
+  if (!m) return Number.MAX_SAFE_INTEGER;
+  const n = parseInt(m[1], 10);
+  const unit = m[2];
+  const mult = unit === "d" ? 1440 : unit === "h" ? 60 : 1;
+  return sign * n * mult;
+};

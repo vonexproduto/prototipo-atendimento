@@ -48,8 +48,9 @@ const AtendimentosList = ({
   viewScope = "all",
   favoritedIds, toggleFavorite,
 }) => {
-  // Favoritos é uma das opções mutuamente exclusivas do segmented control.
+  // Favoritos e SLA são opções mutuamente exclusivas do segmented control.
   const favoritesOnly = viewScope === "favorites";
+  const isSlaMode = viewScope === "sla";
   const c = window.CCM.c;
   const D = window.CCM_DATA;
   const demo = window.CCM_DEMO_STATE || {};
@@ -119,22 +120,29 @@ const AtendimentosList = ({
     let src = D.atendimentos.map(a =>
       statusOverrides[a.id] ? { ...a, status: statusOverrides[a.id] } : a
     );
-    // Filtro de fila — SEMPRE aplicado. Cada atendimento é mapeado de forma
-    // determinística (hash do id) a uma fila-folha. Trocar de fila no menu da
-    // esquerda passa a mostrar atendimentos diferentes (antes mostrava sempre
-    // os mesmos 17, parecia bug de cache).
-    const acceptableLeaves = window.CCM.expandQueueLeaves(queue);
-    if (acceptableLeaves.size > 0) {
-      src = src.filter(a => acceptableLeaves.has(window.CCM.queueOfAtendimento(a.id, D.queues)));
+    // Filtro de fila — aplicado em todos os modos EXCETO SLA. No modo SLA,
+    // a ideia é uma visão global cross-fila ordenada pelo atraso, sem recortes.
+    if (!isSlaMode) {
+      const acceptableLeaves = window.CCM.expandQueueLeaves(queue);
+      if (acceptableLeaves.size > 0) {
+        src = src.filter(a => acceptableLeaves.has(window.CCM.queueOfAtendimento(a.id, D.queues)));
+      }
     }
     // Filtro de escopo: "mine" = só atendimentos onde o atendente logado participa
     if (viewScope === "mine" && meId) {
       src = src.filter(a => (a.atendentes || []).some(at => at.id === meId));
     }
-    // Filtro de favoritos — funciona em qualquer escopo. Como o filtro de
-    // fila já foi aplicado acima, aqui basta filtrar pelo Set de favoritos.
+    // Filtro de favoritos
     if (favoritesOnly && favoritedIds) {
       src = src.filter(a => favoritedIds.has(a.id));
+    }
+    // Modo SLA: ordena ascendente por minutos (mais negativo = mais atrasado primeiro).
+    // Sobrescreve qualquer outra ordenação.
+    if (isSlaMode) {
+      src = [...src].sort((a, b) =>
+        window.CCM.slaTagToMinutes(a.slaTag) - window.CCM.slaTagToMinutes(b.slaTag)
+      );
+      return src;
     }
     if (markerSortMode === "all") return sortByMarker(src);
     if (markerSortMode === "page") {
@@ -143,7 +151,7 @@ const AtendimentosList = ({
       return [...sortByMarker(head), ...tail];
     }
     return src;
-  }, [D.atendimentos, markerSortMode, statusOverrides, viewScope, D.attendant?.id, favoritesOnly, favoritedIds, queue, D.queues]);
+  }, [D.atendimentos, markerSortMode, statusOverrides, viewScope, D.attendant?.id, favoritesOnly, favoritedIds, queue, D.queues, isSlaMode]);
 
   React.useEffect(() => {
     const onClick = (e) => {
@@ -185,33 +193,66 @@ const AtendimentosList = ({
           display: "flex", alignItems: "center", justifyContent: "space-between",
           gap: 16,
         }}>
-          {/* Breadcrumb */}
+          {/* Breadcrumb — esconde no modo SLA (view global cross-fila) e mostra
+              um título dedicado no lugar. */}
           <div style={{ minWidth: 0, flex: 1 }}>
-            <QueueBreadcrumb queue={queue} queues={queues} onSelectQueue={onSelectQueue} />
+            {isSlaMode ? (
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <i className="ph ph-clock-countdown" style={{ fontSize: 20, color: "#c8362b" }} />
+                <span style={{ fontSize: 15, fontWeight: 700, color: c.fg1 }}>
+                  Atendimentos por SLA
+                </span>
+                <span style={{
+                  background: "#ffdde3", color: "#c8362b",
+                  fontSize: 10, fontWeight: 700, padding: "3px 8px", borderRadius: 999,
+                  textTransform: "uppercase", letterSpacing: "0.04em",
+                }}>visão global</span>
+              </div>
+            ) : (
+              <QueueBreadcrumb queue={queue} queues={queues} onSelectQueue={onSelectQueue} />
+            )}
           </div>
 
           {/* Right cluster: Filtros + Chips + Novo atendimento */}
           <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
-            <IconLabelButton
-              icon="ph-funnel-simple"
-              label="Filtros avançados"
-              hovered={hoveredBtn === "filtros"}
-              onHoverChange={(h) => setHoveredBtn(h ? "filtros" : null)}
-              active={filtersOpen}
-              onClick={() => setFiltersOpen(o => !o)}
-              variant="ghost"
-            />
+            {!isSlaMode && (
+              <IconLabelButton
+                icon="ph-funnel-simple"
+                label="Filtros avançados"
+                hovered={hoveredBtn === "filtros"}
+                onHoverChange={(h) => setHoveredBtn(h ? "filtros" : null)}
+                active={filtersOpen}
+                onClick={() => setFiltersOpen(o => !o)}
+                variant="ghost"
+              />
+            )}
 
-            {/* View mode chips */}
+            {isSlaMode && (
+              <span style={{
+                display: "inline-flex", alignItems: "center", gap: 6,
+                padding: "7px 12px", borderRadius: 999,
+                background: "#fff4e0", color: "#a8660a",
+                border: "1px solid #f5c97d",
+                fontSize: 12, fontWeight: 600,
+                fontFamily: "Montserrat, sans-serif",
+              }}>
+                <i className="ph ph-sort-descending" style={{ fontSize: 14 }} />
+                Ordenado por SLA (mais atrasados primeiro)
+              </span>
+            )}
+
+            {/* View mode chips — no modo SLA, só lista (kanban/gantt sumem) */}
             <div style={{
               display: "flex", background: "#f2f4f7", borderRadius: 10,
               padding: 3, gap: 2, border: `1px solid ${c.border}`,
             }}>
-              {[
+              {(isSlaMode ? [
+                { v: "list",   icon: "ph-rows",                 label: "Lista" },
+              ] : [
                 { v: "list",   icon: "ph-rows",                 label: "Lista" },
                 { v: "kanban", icon: "ph-kanban",               label: "Kanban" },
                 { v: "gantt",  icon: "ph-chart-bar-horizontal", label: "Gantt" },
-              ].map(({ v, icon, label }) => {
+              ]).map(({ v, icon, label }) => {
                 const active = viewMode === v;
                 const hovered = hoveredBtn === `chip-${v}`;
                 const showLabel = active || hovered;
@@ -277,21 +318,21 @@ const AtendimentosList = ({
 
       {/* ── Content area ── */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", padding: "16px 24px 16px", position: "relative" }}>
-        {viewMode === "kanban" && (
+        {!isSlaMode && viewMode === "kanban" && (
           <KanbanView
             atendimentos={displayedAtendimentos}
             onOpenAtendimento={onOpenAtendimento}
             onEdit={setEditAtendimentoId}
           />
         )}
-        {viewMode === "gantt" && (
+        {!isSlaMode && viewMode === "gantt" && (
           <GanttView
             atendimentos={displayedAtendimentos}
             onOpenAtendimento={onOpenAtendimento}
             onEdit={setEditAtendimentoId}
           />
         )}
-        {viewMode === "list" && (
+        {(isSlaMode || viewMode === "list") && (
         /* Table Card — flex column, fills space, clips overflow */
         <div style={{
           flex: 1, display: "flex", flexDirection: "column", minHeight: 0,
@@ -308,13 +349,18 @@ const AtendimentosList = ({
                   {[
                     { label: "ID" },
                     { label: "Nome" },
+                    // Em modo SLA, duas colunas a mais — pra saber de qual operação/fila o item veio
+                    ...(isSlaMode ? [
+                      { label: "Operação" },
+                      { label: "Fila" },
+                    ] : []),
                     { label: "Data início" },
                     { label: "Marcadores", sort: true, onClick: () => setMarkerModalOpen(true), active: !!markerSortMode },
                     { label: "Contatos" },
                     { label: "Atendentes" },
                     { label: "Conversas" },
                     { label: "Status" },
-                    { label: "SLA" },
+                    { label: "SLA", active: isSlaMode },
                     { label: "Ações", sticky: true },
                   ].map(({ label, sort, sticky, onClick, active }) => (
                     <th key={label}
@@ -370,6 +416,31 @@ const AtendimentosList = ({
                         </span>
                       </td>
                       <td style={{ padding: "12px 16px", fontSize: 13, color: c.fg1, maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.titulo.split("—")[0].trim()}</td>
+                      {isSlaMode && (() => {
+                        const chain = window.CCM.queueChainForAtendimento(a.id, D.queues);
+                        const op = chain?.operacao;
+                        const fl = chain?.fila;
+                        return (
+                          <React.Fragment>
+                            <td style={{ padding: "12px 16px", fontSize: 12, color: c.fg1, whiteSpace: "nowrap" }}>
+                              {op ? (
+                                <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                                  <span style={{ fontSize: 14 }}>{op.icon}</span>
+                                  <span style={{ maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis" }}>{op.name}</span>
+                                </span>
+                              ) : "—"}
+                            </td>
+                            <td style={{ padding: "12px 16px", fontSize: 12, color: c.fg1, whiteSpace: "nowrap" }}>
+                              {fl ? (
+                                <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                                  <span style={{ fontSize: 14 }}>{fl.icon}</span>
+                                  <span style={{ maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis" }}>{fl.name}</span>
+                                </span>
+                              ) : "—"}
+                            </td>
+                          </React.Fragment>
+                        );
+                      })()}
                       <td style={{ padding: "12px 16px", fontSize: 12, color: c.fg2, whiteSpace: "nowrap" }}>{a.dataInicio}</td>
                       <td style={{ padding: "12px 16px", fontSize: 12, color: c.fg2, whiteSpace: "nowrap" }}>
                         {a.marcadores.length > 0 ? (

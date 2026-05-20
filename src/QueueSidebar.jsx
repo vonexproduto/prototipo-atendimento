@@ -100,18 +100,34 @@ const QueueSidebar = ({
         />
       )}
 
-      {/* Queues tree — quando favoritos ativos, esconde filas-folha sem nenhum
-          atendimento favoritado mapeado pra elas (e pais sem filhos visíveis). */}
-      <QueuesTree
-        queues={D.queues}
-        atendimentos={D.atendimentos}
-        activeQueueId={activeQueueId}
-        expanded={expanded}
-        setExpanded={setExpanded}
-        onSelectQueue={onSelectQueue}
-        favoritesOnly={favoritesOnly}
-        favoritedIds={favoritedIds}
-      />
+      {/* Queues tree — escondida no modo SLA (a view por SLA ignora filas).
+          No modo Favoritos, esconde filas-folha sem favoritos. */}
+      {viewScope === "sla" ? (
+        <div style={{
+          flex: 1, padding: "32px 18px",
+          display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+          textAlign: "center", color: c.fg3, fontSize: 12, lineHeight: 1.5,
+        }}>
+          <i className="ph ph-clock-countdown" style={{ fontSize: 32, color: "#c8362b", marginBottom: 10 }} />
+          <div style={{ color: c.fg1, fontWeight: 600, marginBottom: 4 }}>
+            Visão por SLA ativa
+          </div>
+          <div>
+            Todos os atendimentos, de todas as filas e operações, ordenados pelo atraso.
+          </div>
+        </div>
+      ) : (
+        <QueuesTree
+          queues={D.queues}
+          atendimentos={D.atendimentos}
+          activeQueueId={activeQueueId}
+          expanded={expanded}
+          setExpanded={setExpanded}
+          onSelectQueue={onSelectQueue}
+          favoritesOnly={favoritesOnly}
+          favoritedIds={favoritedIds}
+        />
+      )}
 
       {/* Resize handle */}
       <ResizeHandle
@@ -319,9 +335,11 @@ const ScopeToggleButton = ({ active, onClick, icon, tooltip, badge, activeColor,
   );
 };
 
-// Segmented control com 3 opções mutuamente exclusivas:
-//   Meus | Todos | Favoritos
-// "Favoritos" mostra o badge de contagem e usa cor laranja quando ativo.
+// Segmented control com 4 opções mutuamente exclusivas:
+//   Meus | Todos | Favoritos | SLA
+// "Favoritos" mostra badge de contagem + cor laranja quando ativo.
+// "SLA" é uma view dramática: esconde sidebar/breadcrumb e mostra todos
+// os atendimentos ordenados pelo atraso (do maior pro menor).
 const ScopeToggle = ({ scope = "all", onChange, favoritesCount = 0 }) => {
   const c = window.CCM.c;
   const items = [
@@ -329,6 +347,8 @@ const ScopeToggle = ({ scope = "all", onChange, favoritesCount = 0 }) => {
     { v: "all",       icon: "ph-users", tooltip: "Todos os atendimentos" },
     { v: "favorites", icon: "ph-star",  tooltip: "Apenas meus favoritos",
       activeColor: "#f5a623", activeBg: "#fff4e0", badge: favoritesCount },
+    { v: "sla",       icon: "ph-clock", tooltip: "Atendimentos por SLA",
+      activeColor: "#c8362b", activeBg: "#ffdde3" },
   ];
   return (
     <div style={{
