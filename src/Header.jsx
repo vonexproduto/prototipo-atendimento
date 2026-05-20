@@ -7,6 +7,12 @@ const Header = ({ active = "Chat", onNav }) => {
     { label: "Jornada", chevron: true },
     { label: "Relatórios", chevron: true },
   ];
+
+  // Menu de configurações (engrenagem) + modal de Chat
+  const gearRef = React.useRef(null);
+  const [settingsOpen, setSettingsOpen] = React.useState(false);
+  const [openModal, setOpenModal] = React.useState(null); // "chat" | null
+
   return (
     <header style={{
       height: 60, background: "#fff",
@@ -45,7 +51,12 @@ const Header = ({ active = "Chat", onNav }) => {
         }}><i className="ph ph-plus" style={{ fontSize: 20 }} /></button>
         <HeaderIcon icon="ph-tray" />
         <HeaderIcon icon="ph-question" />
-        <HeaderIcon icon="ph-gear" />
+        <HeaderIcon
+          icon="ph-gear"
+          buttonRef={gearRef}
+          active={settingsOpen}
+          onClick={() => setSettingsOpen(o => !o)}
+        />
         <span style={{
           width: 36, height: 36, borderRadius: "50%",
           border: `1.5px solid ${c.primary}`, color: c.primary,
@@ -53,17 +64,47 @@ const Header = ({ active = "Chat", onNav }) => {
           display: "flex", alignItems: "center", justifyContent: "center",
         }}>CA</span>
       </div>
+
+      {/* Menu de configurações (dropdown) */}
+      {settingsOpen && (
+        <SettingsMenu
+          anchorRef={gearRef}
+          onClose={() => setSettingsOpen(false)}
+          onOpenModal={(modalId) => setOpenModal(modalId)}
+        />
+      )}
+
+      {/* Modal de Configurações do Chat */}
+      {openModal === "chat" && (
+        <ChatSettingsModal
+          onClose={() => setOpenModal(null)}
+          onSave={(data) => {
+            try { localStorage.setItem("ccm.chatSettings", JSON.stringify(data)); } catch {}
+            // eslint-disable-next-line no-console
+            console.log("[CCM] Configurações do chat salvas:", data);
+          }}
+        />
+      )}
     </header>
   );
 };
-const HeaderIcon = ({ icon }) => {
+
+const HeaderIcon = ({ icon, buttonRef, active, onClick }) => {
   const c = window.CCM.c;
   return (
-    <button style={{
-      width: 36, height: 36, borderRadius: 8, border: 0, background: "transparent",
-      color: c.fg1, cursor: "pointer",
-      display: "flex", alignItems: "center", justifyContent: "center",
-    }}><i className={`ph ${icon}`} style={{ fontSize: 20 }} /></button>
+    <button
+      ref={buttonRef}
+      onClick={onClick}
+      style={{
+        width: 36, height: 36, borderRadius: 8, border: 0,
+        background: active ? c.primaryLightest : "transparent",
+        color: active ? c.primary : c.fg1,
+        cursor: "pointer",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        transition: "background 120ms ease, color 120ms ease",
+      }}
+    ><i className={`ph ${icon}`} style={{ fontSize: 20 }} /></button>
   );
 };
+
 Object.assign(window, { Header });

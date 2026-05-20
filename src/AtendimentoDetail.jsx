@@ -18,11 +18,36 @@ const AtendimentoDetail = ({
   const [marcadoresPop, setMarcadoresPop] = React.useState(null); // { top, left }
   const [contatoPanel, setContatoPanel] = React.useState(null);    // contact object
   const [contatoExpanded, setContatoExpanded] = React.useState(false);
+  const [contatosPop, setContatosPop] = React.useState(null);     // { top, left }
+  const [atendentesPop, setAtendentesPop] = React.useState(null); // { top, left }
   const [currentFila, setCurrentFila] = React.useState(a.tipo || "Atendimento ao cliente");
   const [appliedMarkers, setAppliedMarkers] = React.useState(a.marcadores || []);
+  const [currentStatus, setCurrentStatus] = React.useState(a.status || "Aberta");
+  const [statusDd, setStatusDd] = React.useState(null); // { top, left }
+  // Overrides locais do status de conversas (id → status). Permite "Finalizar"
+  // marcar a conversa atual sem alterar o dataset.
+  const [convStatusOverrides, setConvStatusOverrides] = React.useState({});
+  const finalizeConversa = React.useCallback((convId) => {
+    setConvStatusOverrides(prev => ({ ...prev, [convId]: "Finalizada" }));
+  }, []);
+
+  // Cor do badge de status (mesma paleta da lista pra consistência visual)
+  const statusColor = (s) => {
+    if (s === "Aberto" || s === "Aberta") return { bg: c.successLight, fg: c.successDark };
+    if (s === "Em andamento")             return { bg: "#fff4d1", fg: "#a8660a" };
+    if (s === "Pendente")                 return { bg: c.warningLight, fg: c.warningDark };
+    if (s === "Pausado")                  return { bg: "#ffe4c4", fg: "#c45a0c" };
+    if (s === "Cancelado")                return { bg: "#ffdde3", fg: "#c8362b" };
+    if (s === "Finalizado")               return { bg: "#d4f0e2", fg: "#2f7a32" };
+    return { bg: c.borderSoft, fg: c.fg2 };
+  };
 
   // Ensure we always have conv objects array
-  const conversas = Array.isArray(a.conversas) ? a.conversas : [];
+  const conversasRaw = Array.isArray(a.conversas) ? a.conversas : [];
+  // Aplica overrides de status locais (após "Finalizar" via modal)
+  const conversas = conversasRaw.map(cv =>
+    convStatusOverrides[cv.id] ? { ...cv, status: convStatusOverrides[cv.id] } : cv
+  );
   const conv = conversas[openConvIdx];
   const contact = conv?.contact || a.contatos[0];
 
@@ -98,40 +123,57 @@ const AtendimentoDetail = ({
             <React.Fragment>
               <i className="ph ph-tag" style={{ fontSize: 18, color: c.fg2 }} />
               <span style={{ fontSize: 15, fontWeight: 700, color: c.fg1 }}>#{a.id}</span>
-              <div
-                onClick={(e) => {
-                  const r = e.currentTarget.getBoundingClientRect();
-                  setMarcadoresPop({ top: r.bottom + 6, left: r.left });
-                }}
-                style={{ display: "flex", gap: 6, cursor: "pointer", padding: "4px 6px", borderRadius: 8 }}
-                onMouseEnter={e => e.currentTarget.style.background = c.borderSoft}
-                onMouseLeave={e => e.currentTarget.style.background = "transparent"}
-              >
-                {appliedMarkers.length > 0 ? appliedMarkers.map(m => (
-                  <span key={m.label} style={{
-                    background: m.color + "14", color: m.color,
-                    fontSize: 10, fontWeight: 600, padding: "3px 10px", borderRadius: 999,
-                  }}>{m.label}</span>
-                )) : (
-                  <span style={{ fontSize: 11, color: c.fg3, fontStyle: "italic" }}>+ Adicionar marcador</span>
-                )}
-              </div>
             </React.Fragment>
           )}
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          {/* contact count badge */}
-          <span style={{
-            width: 28, height: 28, borderRadius: "50%",
-            background: c.secundaryLightest, color: c.secundaryMedium,
-            fontSize: 11, fontWeight: 700,
-            display: "flex", alignItems: "center", justifyContent: "center",
-          }}>{a.contatos.length}</span>
-          <div onClick={() => setContatoPanel(a.contatos[0])} style={{ cursor: "pointer" }} title="Ver informações do contato">
-            <AvatarStackHeader list={a.contatos} extra={a.contatosExtra} />
+          {/* Cluster CONTATOS — badge de quantidade + stack de avatares
+              clicáveis juntos abrem o popover "Contatos do atendimento".
+              Distinção importante: este é o panorama do atendimento (todos
+              os contatos envolvidos em qualquer conversa). O contato
+              específico da conversa aberta tem outro ponto de entrada
+              (ícone 👤 na ConversaPanel). */}
+          <div
+            onClick={(e) => {
+              const r = e.currentTarget.getBoundingClientRect();
+              setContatosPop({ top: r.bottom + 8, left: r.left });
+              setAtendentesPop(null);
+            }}
+            title="Contatos do atendimento"
+            style={{
+              display: "flex", alignItems: "center", gap: 6,
+              cursor: "pointer", padding: "2px 4px", borderRadius: 8,
+              transition: "background 120ms ease",
+            }}
+            onMouseEnter={e => e.currentTarget.style.background = c.borderSoft}
+            onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+          >
+            <span style={{
+              width: 28, height: 28, borderRadius: "50%",
+              background: c.secundaryLightest, color: c.secundaryMedium,
+              fontSize: 11, fontWeight: 700,
+              display: "flex", alignItems: "center", justifyContent: "center",
+            }}>{a.contatos.length}</span>
+            <AvatarStackHeader list={a.contatos} />
           </div>
-          <AvatarStackHeader list={a.atendentes} extra={a.atendentesExtra} />
+          {/* Cluster ATENDENTES — popover com nomes dos atendentes envolvidos */}
+          <div
+            onClick={(e) => {
+              const r = e.currentTarget.getBoundingClientRect();
+              setAtendentesPop({ top: r.bottom + 8, left: r.left });
+              setContatosPop(null);
+            }}
+            title="Atendentes do atendimento"
+            style={{
+              cursor: "pointer", padding: "2px 4px", borderRadius: 8,
+              transition: "background 120ms ease",
+            }}
+            onMouseEnter={e => e.currentTarget.style.background = c.borderSoft}
+            onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+          >
+            <AvatarStackHeader list={a.atendentes} />
+          </div>
           <button onClick={() => setAlterarFilaOpen(true)} title="Alterar fila de atendimento" style={{
             display: "inline-flex", alignItems: "center", gap: 6,
             border: 0, cursor: "pointer",
@@ -149,10 +191,36 @@ const AtendimentoDetail = ({
               borderRadius: 999, fontSize: 10,
             }}>{a.slaTag || "-1d"}</span>
           </button>
-          <span style={{
-            background: c.successLight, color: c.successDark,
-            fontSize: 11, fontWeight: 600, padding: "5px 12px", borderRadius: 999,
-          }}>{a.status}</span>
+          {/* Status pill clicável — abre o mesmo StatusDropdown da lista */}
+          {(() => {
+            const sc = statusColor(currentStatus);
+            return (
+              <button
+                data-status-dd="1"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const r = e.currentTarget.getBoundingClientRect();
+                  // Ancora abaixo, alinhado à direita pra não estourar viewport
+                  setStatusDd({ top: r.bottom + 6, right: Math.max(12, window.innerWidth - r.right) });
+                }}
+                title="Alterar status do atendimento"
+                style={{
+                  background: sc.bg, color: sc.fg, border: 0,
+                  fontSize: 11, fontWeight: 600,
+                  padding: "5px 12px", borderRadius: 999,
+                  cursor: "pointer",
+                  display: "inline-flex", alignItems: "center", gap: 6,
+                  fontFamily: "Montserrat, sans-serif",
+                  transition: "filter 120ms ease",
+                }}
+                onMouseEnter={e => e.currentTarget.style.filter = "brightness(0.96)"}
+                onMouseLeave={e => e.currentTarget.style.filter = "none"}
+              >
+                {currentStatus}
+                <i className="ph ph-caret-down" style={{ fontSize: 10, opacity: 0.75 }} />
+              </button>
+            );
+          })()}
           <button onClick={() => setNovaConversaOpen(true)} title="Nova conversa" style={{
             width: 32, height: 32, borderRadius: "50%", border: 0,
             background: c.primary, color: "#fff", cursor: "pointer",
@@ -206,6 +274,12 @@ const AtendimentoDetail = ({
             atendimentoId={a.id}
             tab={tab}
             onTransfer={() => setShowTransfer(true)}
+            onOpenContact={(ct) => setContatoPanel(ct)}
+            onChangeQueue={() => setAlterarFilaOpen(true)}
+            appliedMarkers={appliedMarkers}
+            onOpenMarcadores={(rect) => setMarcadoresPop({ top: rect.bottom + 6, left: rect.left })}
+            convStatus={displayConv?.id ? (convStatusOverrides[displayConv.id] || displayConv.status) : undefined}
+            onFinalizeConversa={finalizeConversa}
             expanded={expanded}
             onToggleExpand={() => setExpanded(e => !e)}
           />
@@ -235,6 +309,35 @@ const AtendimentoDetail = ({
               return exists ? prev.filter(m => m.label !== marker.label) : [...prev, marker];
             });
           }}
+        />
+      )}
+
+      {contatosPop && (
+        <PessoasPopover
+          pos={contatosPop}
+          title="Contatos do atendimento"
+          people={a.contatos}
+          onSelect={(ct) => { setContatoPanel(ct); setContatosPop(null); }}
+          onClose={() => setContatosPop(null)}
+        />
+      )}
+
+      {atendentesPop && (
+        <PessoasPopover
+          pos={atendentesPop}
+          title="Atendentes do atendimento"
+          people={a.atendentes}
+          selectable={false}
+          onClose={() => setAtendentesPop(null)}
+        />
+      )}
+
+      {statusDd && window.StatusDropdown && (
+        <window.StatusDropdown
+          pos={statusDd}
+          current={currentStatus}
+          onClose={() => setStatusDd(null)}
+          onSelect={(s) => { setCurrentStatus(s); setStatusDd(null); }}
         />
       )}
 
@@ -268,9 +371,12 @@ const TabPill = ({ icon, label, active, onClick }) => {
   );
 };
 
-const AvatarStackHeader = ({ list, extra }) => {
+// Stack de avatares sobrepostos. Calcula o "+N" a partir do tamanho real da
+// lista (ignora prop `extra` legado pra evitar contagens fictícias).
+const AvatarStackHeader = ({ list, maxVisible = 3 }) => {
   if (!list?.length) return null;
-  const visible = list.slice(0, 4);
+  const visible = list.slice(0, maxVisible);
+  const overflow = list.length - visible.length;
   return (
     <div style={{ display: "flex" }}>
       {visible.map((p, i) => (
@@ -281,15 +387,90 @@ const AvatarStackHeader = ({ list, extra }) => {
           border: "2px solid #fff", marginLeft: i === 0 ? 0 : -8,
         }}>{p.initials}</span>
       ))}
-      {extra && (
+      {overflow > 0 && (
         <span style={{
           width: 26, height: 26, borderRadius: "50%",
           background: "#9240FF", color: "#fff", fontSize: 9, fontWeight: 700,
           display: "flex", alignItems: "center", justifyContent: "center",
           border: "2px solid #fff", marginLeft: -8,
-        }}>+{extra}</span>
+        }}>+{overflow}</span>
       )}
     </div>
+  );
+};
+
+// ─────────────────────────────────────────────
+// PessoasPopover — lista contatos OU atendentes do atendimento
+// Click num nome → callback (no caso de contatos, abre ContatoSidePanel)
+// ─────────────────────────────────────────────
+const PessoasPopover = ({ pos, title, people, onSelect, onClose, selectable = true }) => {
+  const c = window.CCM.c;
+  React.useEffect(() => {
+    const h = (e) => { if (!e.target.closest("[data-pessoas-pop]")) onClose(); };
+    setTimeout(() => document.addEventListener("mousedown", h), 0);
+    return () => document.removeEventListener("mousedown", h);
+  }, [onClose]);
+
+  // Clamp ao viewport pra não cortar
+  const popWidth = 280;
+  const left = Math.min(pos.left, window.innerWidth - popWidth - 12);
+
+  return ReactDOM.createPortal(
+    <div data-pessoas-pop="1" style={{
+      position: "fixed",
+      top: pos.top, left,
+      width: popWidth,
+      background: "#fff",
+      borderRadius: 12,
+      boxShadow: "0 8px 24px rgba(40,41,61,0.18)",
+      border: `1px solid ${c.border}`,
+      zIndex: 5000,
+      fontFamily: "Montserrat, sans-serif",
+      overflow: "hidden",
+    }}>
+      <div style={{
+        padding: "12px 14px 8px",
+        fontSize: 12, fontWeight: 700, color: c.fg1,
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+      }}>
+        <span>{title} <span style={{ color: c.fg3, fontWeight: 600 }}>({people.length})</span></span>
+      </div>
+      <div style={{ maxHeight: 320, overflowY: "auto" }}>
+        {people.map((p, i) => (
+          <div key={i}
+            onClick={() => selectable && onSelect?.(p)}
+            style={{
+              display: "flex", alignItems: "center", gap: 10,
+              padding: "8px 14px",
+              cursor: selectable ? "pointer" : "default",
+              transition: "background 120ms ease",
+            }}
+            onMouseEnter={e => { if (selectable) e.currentTarget.style.background = c.borderSoft; }}
+            onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
+          >
+            <span style={{
+              width: 28, height: 28, borderRadius: "50%",
+              background: p.bg, color: p.fg, fontSize: 10, fontWeight: 700,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              flexShrink: 0,
+            }}>{p.initials}</span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{
+                fontSize: 12, fontWeight: 600, color: c.fg1,
+                whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+              }}>{p.name}</div>
+              {i === 0 && selectable && (
+                <div style={{ fontSize: 10, color: c.fg3 }}>Contato principal</div>
+              )}
+            </div>
+            {selectable && (
+              <i className="ph ph-caret-right" style={{ fontSize: 12, color: c.fg3 }} />
+            )}
+          </div>
+        ))}
+      </div>
+    </div>,
+    document.body
   );
 };
 
@@ -744,16 +925,27 @@ const MarcadoresPopover = ({ pos, applied, onClose, onToggle }) => {
   const isApplied = (m) => applied.some(x => x.label === m.label);
   const available = AVAILABLE_MARKERS.filter(m => !isApplied(m) && (!search || m.label.toLowerCase().includes(search.toLowerCase())));
 
+  // Clamp dentro da viewport: nunca passa de 12px da borda direita/esquerda;
+  // se não couber abaixo, sobe (top → bottom anchor).
+  const POP_W = 360;
+  const POP_H_MAX = 480;
+  const MARGIN = 12;
+  const vw = typeof window !== "undefined" ? window.innerWidth : 1024;
+  const vh = typeof window !== "undefined" ? window.innerHeight : 768;
+  const left = Math.max(MARGIN, Math.min(pos.left, vw - POP_W - MARGIN));
+  const fitsBelow = pos.top + POP_H_MAX <= vh - MARGIN;
+  const topStyle = fitsBelow ? { top: pos.top } : { top: Math.max(MARGIN, vh - POP_H_MAX - MARGIN) };
+
   return ReactDOM.createPortal(
     <div data-marcadores-pop="1" style={{
-      position: "fixed", top: pos.top, left: pos.left,
-      width: 360, zIndex: 10000,
+      position: "fixed", ...topStyle, left,
+      width: POP_W, zIndex: 10000,
       background: "#fff",
       border: `1px solid ${c.border}`, borderRadius: 12,
       boxShadow: "0 12px 32px rgba(40,41,61,0.20)",
       padding: 16,
       fontFamily: "Montserrat, sans-serif",
-      maxHeight: 480, overflowY: "auto",
+      maxHeight: POP_H_MAX, overflowY: "auto",
     }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
         <span style={{ fontSize: 13, fontWeight: 700, color: c.fg1 }}>Marcador de conversa</span>

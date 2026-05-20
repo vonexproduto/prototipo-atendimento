@@ -43,7 +43,11 @@ const IconLabelButton = ({ icon, label, hovered, onHoverChange, active, onClick,
   );
 };
 
-const AtendimentosList = ({ queue, queues, onSelectQueue, onOpenAtendimento }) => {
+const AtendimentosList = ({
+  queue, queues, onSelectQueue, onOpenAtendimento,
+  viewScope = "all",
+  favoritedIds, toggleFavorite, favoritesOnly = false,
+}) => {
   const c = window.CCM.c;
   const D = window.CCM_DATA;
   const demo = window.CCM_DEMO_STATE || {};
@@ -62,6 +66,32 @@ const AtendimentosList = ({ queue, queues, onSelectQueue, onOpenAtendimento }) =
   const [statusOverrides, setStatusOverrides] = React.useState({}); // { [id]: newStatus }
   const [hoveredBtn, setHoveredBtn] = React.useState(null);
   const searchRef = React.useRef(null);
+
+  // Recurso "Transferir por I.A." — só na fila "Sem fila específica".
+  // Modal de confirmação + set de IDs marcados como transferidos +
+  // snackbar de sucesso. Os atendimentos marcados ganham um ícone-cérebro
+  // ao lado do ID na tabela.
+  const [iaModalOpen, setIaModalOpen] = React.useState(false);
+  const [iaTransferredIds, setIaTransferredIds] = React.useState(() => new Set());
+  const [iaSnack, setIaSnack] = React.useState(null);
+  const isSemFila = queue?.id === "sem-fila";
+
+  // ── Favoritos ──
+  // O estado vive no App e é passado como props (favoritedIds Set,
+  // toggleFavorite callback, favoritesOnly boolean). Persiste em
+  // localStorage e funciona em qualquer escopo.
+
+  const handleConfirmIA = () => {
+    // Demo: marca os 6 atendimentos novos (100501..506) + os 3 primeiros da lista
+    const targetIds = new Set([
+      "100501", "100502", "100503", "100504", "100505", "100506",
+      ...D.atendimentos.slice(0, 3).map(a => a.id),
+    ]);
+    setIaTransferredIds(targetIds);
+    setIaModalOpen(false);
+    setIaSnack(`${targetIds.size} atendimentos transferidos por I.A.`);
+    setTimeout(() => setIaSnack(null), 3800);
+  };
 
   React.useEffect(() => {
     if (!openMenuId) return;
@@ -83,9 +113,27 @@ const AtendimentosList = ({ queue, queues, onSelectQueue, onOpenAtendimento }) =
   });
 
   const displayedAtendimentos = React.useMemo(() => {
-    const src = D.atendimentos.map(a =>
+    const meId = D.attendant?.id;
+    let src = D.atendimentos.map(a =>
       statusOverrides[a.id] ? { ...a, status: statusOverrides[a.id] } : a
     );
+    // Filtro de fila — SEMPRE aplicado. Cada atendimento é mapeado de forma
+    // determinística (hash do id) a uma fila-folha. Trocar de fila no menu da
+    // esquerda passa a mostrar atendimentos diferentes (antes mostrava sempre
+    // os mesmos 17, parecia bug de cache).
+    const acceptableLeaves = window.CCM.expandQueueLeaves(queue);
+    if (acceptableLeaves.size > 0) {
+      src = src.filter(a => acceptableLeaves.has(window.CCM.queueOfAtendimento(a.id, D.queues)));
+    }
+    // Filtro de escopo: "mine" = só atendimentos onde o atendente logado participa
+    if (viewScope === "mine" && meId) {
+      src = src.filter(a => (a.atendentes || []).some(at => at.id === meId));
+    }
+    // Filtro de favoritos — funciona em qualquer escopo. Como o filtro de
+    // fila já foi aplicado acima, aqui basta filtrar pelo Set de favoritos.
+    if (favoritesOnly && favoritedIds) {
+      src = src.filter(a => favoritedIds.has(a.id));
+    }
     if (markerSortMode === "all") return sortByMarker(src);
     if (markerSortMode === "page") {
       const head = src.slice(0, PAGE_SIZE);
@@ -93,7 +141,7 @@ const AtendimentosList = ({ queue, queues, onSelectQueue, onOpenAtendimento }) =
       return [...sortByMarker(head), ...tail];
     }
     return src;
-  }, [D.atendimentos, markerSortMode, statusOverrides]);
+  }, [D.atendimentos, markerSortMode, statusOverrides, viewScope, D.attendant?.id, favoritesOnly, favoritedIds, queue, D.queues]);
 
   React.useEffect(() => {
     const onClick = (e) => {
@@ -190,6 +238,29 @@ const AtendimentosList = ({ queue, queues, onSelectQueue, onOpenAtendimento }) =
               })}
             </div>
 
+            {isSemFila && (
+              <button
+                type="button"
+                onClick={() => setIaModalOpen(true)}
+                onMouseEnter={() => setHoveredBtn("ia")}
+                onMouseLeave={() => setHoveredBtn(null)}
+                title="Transferir atendimentos por I.A."
+                style={{
+                  width: 38, height: 38, borderRadius: 10, border: 0,
+                  background: c.primary, color: "#fff", cursor: "pointer",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  boxShadow: hoveredBtn === "ia"
+                    ? "0 4px 12px rgba(146,64,255,0.42)"
+                    : "0 2px 6px rgba(146,64,255,0.30)",
+                  transition: "box-shadow 150ms ease, transform 150ms ease",
+                  transform: hoveredBtn === "ia" ? "translateY(-1px)" : "none",
+                  position: "relative",
+                }}
+              >
+                <i className="ph-fill ph-brain" style={{ fontSize: 18 }} />
+              </button>
+            )}
+
             <IconLabelButton
               icon="ph-plus"
               label="Novo atendimento"
@@ -228,7 +299,7 @@ const AtendimentosList = ({ queue, queues, onSelectQueue, onOpenAtendimento }) =
 
           {/* ── Scrollable table (both axes) ── */}
           <div style={{ flex: 1, overflow: "auto", minHeight: 0 }}>
-            {demo.loadingTable ? <LoadingSkeleton /> : demo.emptyQueue ? <EmptyState /> : (
+            {demo.loadingTable ? <LoadingSkeleton /> : (demo.emptyQueue || displayedAtendimentos.length === 0) ? <EmptyState /> : (
             <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 960 }}>
               <thead>
                 <tr style={{ background: "#fafbfd", position: "sticky", top: 0, zIndex: 3 }}>
@@ -288,7 +359,14 @@ const AtendimentosList = ({ queue, queues, onSelectQueue, onOpenAtendimento }) =
                   const sl = a.slaTag ? slaColor(a.slaTag) : null;
                   return (
                     <tr key={a.id} style={{ borderBottom: `1px solid ${c.borderSoft}` }}>
-                      <td style={{ padding: "12px 16px", fontSize: 13, color: c.fg1, fontWeight: 500, whiteSpace: "nowrap" }}>{a.id}</td>
+                      <td style={{ padding: "12px 16px", fontSize: 13, color: c.fg1, fontWeight: 500, whiteSpace: "nowrap" }}>
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                          {iaTransferredIds.has(a.id) && (
+                            <IaTransferredBadge />
+                          )}
+                          {a.id}
+                        </span>
+                      </td>
                       <td style={{ padding: "12px 16px", fontSize: 13, color: c.fg1, maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.titulo.split("—")[0].trim()}</td>
                       <td style={{ padding: "12px 16px", fontSize: 12, color: c.fg2, whiteSpace: "nowrap" }}>{a.dataInicio}</td>
                       <td style={{ padding: "12px 16px", fontSize: 12, color: c.fg2, whiteSpace: "nowrap" }}>
@@ -353,6 +431,29 @@ const AtendimentosList = ({ queue, queues, onSelectQueue, onOpenAtendimento }) =
                             onMouseEnter={e => { e.currentTarget.style.background = c.primaryLightest; e.currentTarget.style.color = c.primary; }}
                             onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = c.fg2; }}>
                             <i className="ph ph-eye" style={{ fontSize: 16 }} />
+                          </button>
+                          {/* Estrela de favorito — laranja quando marcado, cinza no resto */}
+                          <button
+                            onClick={(e) => { e.stopPropagation(); toggleFavorite(a.id); }}
+                            title={favoritedIds.has(a.id) ? "Remover dos favoritos" : "Marcar como favorito"}
+                            style={{
+                              width: 28, height: 28, borderRadius: 8, border: 0,
+                              background: "transparent",
+                              color: favoritedIds.has(a.id) ? "#f5a623" : c.fg2,
+                              cursor: "pointer",
+                              display: "flex", alignItems: "center", justifyContent: "center",
+                              transition: "background 120ms ease, color 120ms ease",
+                            }}
+                            onMouseEnter={e => {
+                              e.currentTarget.style.background = favoritedIds.has(a.id) ? "#fff4e0" : c.primaryLightest;
+                              if (!favoritedIds.has(a.id)) e.currentTarget.style.color = "#f5a623";
+                            }}
+                            onMouseLeave={e => {
+                              e.currentTarget.style.background = "transparent";
+                              e.currentTarget.style.color = favoritedIds.has(a.id) ? "#f5a623" : c.fg2;
+                            }}
+                          >
+                            <i className={`ph${favoritedIds.has(a.id) ? "-fill" : ""} ph-star`} style={{ fontSize: 16 }} />
                           </button>
                           <button onClick={() => setEditAtendimentoId(a.id)} title="Editar"
                             style={{
@@ -475,7 +576,134 @@ const AtendimentosList = ({ queue, queues, onSelectQueue, onOpenAtendimento }) =
           onConfirm={(mode) => { setMarkerSortMode(mode); setMarkerModalOpen(false); }}
         />
       )}
+
+      {/* Confirmação: transferir atendimentos por I.A. */}
+      {iaModalOpen && (
+        <IaTransferConfirmModal
+          onClose={() => setIaModalOpen(false)}
+          onConfirm={handleConfirmIA}
+        />
+      )}
+
+      {/* Snackbar de sucesso após transferência por I.A. */}
+      {iaSnack && (
+        <div style={{
+          position: "fixed", bottom: 28, left: "50%", transform: "translateX(-50%)",
+          background: "#28293d", color: "#fff",
+          padding: "12px 22px", borderRadius: 10,
+          fontFamily: "Montserrat, sans-serif", fontSize: 13, fontWeight: 500,
+          boxShadow: "0 8px 24px rgba(40,41,61,0.32)",
+          zIndex: 10000,
+          display: "flex", alignItems: "center", gap: 10,
+          animation: "ccmFadeIn 220ms ease",
+        }}>
+          <i className="ph-fill ph-brain" style={{ fontSize: 16, color: "#b699ff" }} />
+          {iaSnack}
+        </div>
+      )}
     </section>
+  );
+};
+
+// ─────────────────────────────────────────────
+// IaTransferredBadge — chip-ícone "transferido por I.A." na linha
+// (tooltip nativo via title=)
+// ─────────────────────────────────────────────
+const IaTransferredBadge = () => {
+  const c = window.CCM.c;
+  return (
+    <span
+      title="Esse atendimento foi transferido por I.A."
+      style={{
+        display: "inline-flex", alignItems: "center", justifyContent: "center",
+        width: 20, height: 20, borderRadius: 6,
+        background: c.primaryLightest, color: c.primary,
+        flexShrink: 0, cursor: "help",
+      }}
+      aria-label="Transferido por I.A."
+    >
+      <i className="ph-fill ph-brain" style={{ fontSize: 12 }} />
+    </span>
+  );
+};
+
+// ─────────────────────────────────────────────
+// IaTransferConfirmModal — confirmação de atribuição automática por I.A.
+// ─────────────────────────────────────────────
+const IaTransferConfirmModal = ({ onClose, onConfirm }) => {
+  const c = window.CCM.c;
+
+  React.useEffect(() => {
+    const onKey = (e) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  return ReactDOM.createPortal(
+    <div
+      onClick={onClose}
+      style={{
+        position: "fixed", inset: 0, zIndex: 9999,
+        background: "rgba(40,41,61,0.45)",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        padding: 24,
+        fontFamily: "Montserrat, sans-serif",
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background: "#fff", width: "100%", maxWidth: 420,
+          borderRadius: 16, boxShadow: "0 20px 50px rgba(40,41,61,0.30)",
+          padding: "28px 28px 22px",
+          textAlign: "center",
+        }}
+      >
+        <div style={{
+          width: 48, height: 48, borderRadius: 12,
+          background: c.primaryLightest, color: c.primary,
+          display: "flex", alignItems: "center", justifyContent: "center",
+          margin: "0 auto 14px",
+        }}>
+          <i className="ph-fill ph-brain" style={{ fontSize: 22 }} />
+        </div>
+
+        <div style={{ fontSize: 17, fontWeight: 700, color: c.fg1, marginBottom: 12, lineHeight: 1.35 }}>
+          Atribuição automática de fila por I.A.
+        </div>
+
+        <div style={{ fontSize: 13, color: c.fg2, lineHeight: 1.55, marginBottom: 22 }}>
+          Deseja realmente ativar a atribuição automática de filas por Inteligência Artificial?
+          Ao clicar em <strong>"Sim, atribuir"</strong>, o sistema analisará o conteúdo das conversas e
+          direcionará automaticamente cada atendimento para a fila com o contexto mais adequado.
+        </div>
+
+        <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
+          <button
+            type="button"
+            onClick={onClose}
+            style={{
+              border: `1px solid ${c.border}`, background: "#fff",
+              color: c.fg1, fontWeight: 600, fontSize: 13,
+              cursor: "pointer", padding: "10px 22px", borderRadius: 8,
+              fontFamily: "Montserrat, sans-serif", flex: 1,
+            }}
+          >Cancelar</button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            style={{
+              border: 0, background: c.primary, color: "#fff",
+              fontWeight: 700, fontSize: 13, cursor: "pointer",
+              padding: "10px 22px", borderRadius: 8,
+              fontFamily: "Montserrat, sans-serif", flex: 1,
+              boxShadow: "0 2px 6px rgba(146,64,255,0.30)",
+            }}
+          >Sim, atribuir</button>
+        </div>
+      </div>
+    </div>,
+    document.body
   );
 };
 
@@ -2051,6 +2279,21 @@ const KanbanCard = ({ a, onOpen, onEdit, barColor }) => {
 // ─────────────────────────────────────────────
 // GanttView — timeline by data início → fim
 // ─────────────────────────────────────────────
+//
+// Convenções:
+// - "Hoje" no mock = 01/01/2026 14:00 (logo após a última dataInicio dos atendimentos).
+//   Linha vermelha vertical marca essa posição.
+// - Atendimentos abertos (Aberto/Aberta/Pendente/Em andamento) têm a barra
+//   estendida até HOJE. Atendimentos encerrados usam duração determinística
+//   baseada no id.
+// - Toda barra mostra algum texto. Em barras finas mostra só o ID; em barras
+//   mais largas mostra a janela de tempo; em barras muito largas mostra
+//   o título também.
+// ─────────────────────────────────────────────
+const MOCK_NOW = new Date(2026, 0, 1, 14, 0); // 01/01/2026 às 14:00
+
+const isOngoingStatus = (status) => /^(Aberto|Aberta|Pendente|Em andamento)$/i.test(status || "");
+
 const GanttView = ({ atendimentos, onOpenAtendimento, onEdit }) => {
   const c = window.CCM.c;
 
@@ -2062,7 +2305,7 @@ const GanttView = ({ atendimentos, onOpenAtendimento, onEdit }) => {
     return new Date(2000 + yy, mm - 1, dd, hh, min);
   };
 
-  // Deterministic duration in hours based on id (range 4–28h)
+  // Deterministic duration in hours based on id (range 4–28h) — usado só pra encerrados
   const durationHours = (id) => {
     let h = 0;
     for (const ch of String(id)) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
@@ -2071,16 +2314,25 @@ const GanttView = ({ atendimentos, onOpenAtendimento, onEdit }) => {
 
   const enriched = atendimentos.map(a => {
     const start = parseDate(a.dataInicio);
-    const end = new Date(start.getTime() + durationHours(a.id) * 3600000);
-    return { ...a, start, end };
+    const ongoing = isOngoingStatus(a.status);
+    let end;
+    if (ongoing) {
+      end = MOCK_NOW;
+    } else {
+      end = new Date(start.getTime() + durationHours(a.id) * 3600000);
+    }
+    // Garante pelo menos 1h de duração visual
+    if (end.getTime() - start.getTime() < 3600000) {
+      end = new Date(start.getTime() + 3600000);
+    }
+    return { ...a, start, end, ongoing };
   });
 
-  // Compute range — round to day boundaries
+  // Compute range — inclui MOCK_NOW + 1 dia de buffer
   const minStart = new Date(Math.min(...enriched.map(a => a.start.getTime())));
-  const maxEnd   = new Date(Math.max(...enriched.map(a => a.end.getTime())));
+  const maxEnd   = new Date(Math.max(MOCK_NOW.getTime(), ...enriched.map(a => a.end.getTime())));
   minStart.setHours(0, 0, 0, 0);
   const rangeStart = minStart.getTime();
-  // Round end to next-day midnight
   const endDay = new Date(maxEnd);
   endDay.setHours(0, 0, 0, 0);
   endDay.setDate(endDay.getDate() + 1);
@@ -2092,6 +2344,9 @@ const GanttView = ({ atendimentos, onOpenAtendimento, onEdit }) => {
   const ROW_HEIGHT = 44;
   const HEADER_HEIGHT = 40;
   const LABEL_WIDTH = 280;
+
+  // Posição em px da linha "HOJE"
+  const nowPx = ((MOCK_NOW.getTime() - rangeStart) / 86400000) * DAY_WIDTH;
 
   const days = [];
   for (let i = 0; i < totalDays; i++) {
@@ -2194,11 +2449,51 @@ const GanttView = ({ atendimentos, onOpenAtendimento, onEdit }) => {
               ))}
             </div>
 
+            {/* Linha "HOJE" — vermelha, atravessa do header até o fim das linhas */}
+            {nowPx >= 0 && nowPx <= totalWidth && (
+              <div style={{
+                position: "absolute",
+                left: nowPx, top: 0,
+                height: HEADER_HEIGHT + enriched.length * ROW_HEIGHT,
+                width: 2, background: "#ef4444",
+                pointerEvents: "none", zIndex: 4,
+              }}>
+                <div style={{
+                  position: "absolute", top: 8, left: -22,
+                  background: "#ef4444", color: "#fff",
+                  padding: "2px 8px", borderRadius: 4,
+                  fontSize: 10, fontWeight: 700, letterSpacing: 0.3,
+                  whiteSpace: "nowrap", boxShadow: "0 2px 4px rgba(239,68,68,0.32)",
+                  fontFamily: "Montserrat, sans-serif",
+                }}>HOJE</div>
+              </div>
+            )}
+
             {/* Row tracks + bars */}
             {enriched.map((a, idx) => {
               const leftPx = ((a.start.getTime() - rangeStart) / 86400000) * DAY_WIDTH;
-              const widthPx = Math.max(((a.end.getTime() - a.start.getTime()) / 86400000) * DAY_WIDTH, 36);
+              const widthPx = Math.max(((a.end.getTime() - a.start.getTime()) / 86400000) * DAY_WIDTH, 56);
               const sv = statusVisuals(a.status);
+              const tituloCurto = a.titulo.split("—")[1]?.trim() || a.titulo.split("—")[0].trim();
+              const timeLabel = a.ongoing
+                ? `${fmtHM(a.start)} → em andamento`
+                : `${fmtHM(a.start)} → ${fmtHM(a.end)}`;
+              const titleAttr = `#${a.id} • ${tituloCurto} • ${timeLabel}`;
+
+              // Texto da barra adaptado à largura
+              let barText;
+              if (widthPx > 220) {
+                barText = `${timeLabel}  ·  ${tituloCurto}`;
+              } else if (widthPx > 140) {
+                barText = timeLabel;
+              } else if (widthPx > 86) {
+                barText = a.ongoing
+                  ? `${fmtHM(a.start)} → agora`
+                  : `${fmtHM(a.start)} → ${fmtHM(a.end)}`;
+              } else {
+                barText = `#${a.id}`;
+              }
+
               return (
                 <div key={a.id} style={{
                   position: "relative",
@@ -2207,13 +2502,17 @@ const GanttView = ({ atendimentos, onOpenAtendimento, onEdit }) => {
                   background: idx % 2 === 1 ? "#fcfdfe" : "#fff",
                 }}>
                   <div
-                    title={`${a.titulo.split("—")[0].trim()} • ${fmtHM(a.start)} → ${fmtHM(a.end)}`}
+                    title={titleAttr}
                     onClick={() => onOpenAtendimento(a.id)}
                     style={{
                       position: "absolute",
                       left: leftPx, top: 8, height: ROW_HEIGHT - 16,
                       width: widthPx,
                       background: sv.bar,
+                      // Barras em andamento ganham padrão listrado sutil pra indicar visualmente
+                      backgroundImage: a.ongoing
+                        ? `repeating-linear-gradient(135deg, rgba(255,255,255,0.18) 0 6px, transparent 6px 12px), linear-gradient(${sv.bar}, ${sv.bar})`
+                        : undefined,
                       borderRadius: 8,
                       display: "flex", alignItems: "center", padding: "0 10px", gap: 6,
                       color: "#fff", fontSize: 11, fontWeight: 700,
@@ -2224,11 +2523,9 @@ const GanttView = ({ atendimentos, onOpenAtendimento, onEdit }) => {
                     onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-1px)"; e.currentTarget.style.boxShadow = "0 4px 10px rgba(40,41,61,0.22)"; }}
                     onMouseLeave={e => { e.currentTarget.style.transform = "none"; e.currentTarget.style.boxShadow = "0 1px 4px rgba(40,41,61,0.18)"; }}
                   >
-                    {widthPx > 70 && (
-                      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {fmtHM(a.start)} → {fmtHM(a.end)}
-                      </span>
-                    )}
+                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {barText}
+                    </span>
                   </div>
                 </div>
               );
@@ -2403,49 +2700,109 @@ const QueueBreadcrumb = ({
 
   const openSegment = segments.find(s => s.key === openSeg);
 
-  return (
-    <div data-bc="1" style={{ display: "flex", alignItems: "center", gap: 4, minWidth: 0, flexWrap: "nowrap" }}>
-      {segments.map((seg, i) => (
-        <React.Fragment key={seg.key}>
-          {i > 0 && (
-            <span style={{ color: c.fg3, fontSize: 12, flexShrink: 0, padding: "0 2px" }}>/</span>
-          )}
-          {seg.noDropdown ? (
-            <span style={{
-              padding: "4px 8px",
-              color: c.fg3,
+  // ─── Responsive collapse ───
+  // Mede a largura do container e do conteúdo "ideal" (todos os labels expandidos).
+  // Quando o container fica menor que o conteúdo, colapsa segmentos com ícone para
+  // mostrar só ícone + "…". O nome completo continua acessível via tooltip e via
+  // o dropdown ao clicar.
+  const containerRef = React.useRef(null);
+  const measureRef = React.useRef(null);
+  const [collapsed, setCollapsed] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!containerRef.current) return;
+    const checkFit = () => {
+      const container = containerRef.current;
+      const measure = measureRef.current;
+      if (!container || !measure) return;
+      // Width disponível menos um pequeno colchão pra evitar oscilação
+      const available = container.clientWidth - 8;
+      const ideal = measure.scrollWidth;
+      // Se o ideal é maior que o disponível => colapsa.
+      // Histerese: mantém colapsado até sobrar bom espaço (12px).
+      setCollapsed(prev => {
+        if (prev) return ideal > available + 12 || available < ideal - 12 ? true : false;
+        return ideal > available;
+      });
+    };
+    checkFit();
+    const ro = new ResizeObserver(checkFit);
+    ro.observe(containerRef.current);
+    if (measureRef.current) ro.observe(measureRef.current);
+    return () => ro.disconnect();
+  }, [queue?.id, atendimentoId, isChild]);
+
+  const renderSegment = (seg, i, opts = {}) => {
+    const isCompact = !!opts.compact && seg.icon && !seg.noDropdown;
+    return (
+      <React.Fragment key={seg.key}>
+        {i > 0 && (
+          <span style={{ color: c.fg3, fontSize: 12, flexShrink: 0, padding: "0 2px" }}>/</span>
+        )}
+        {seg.noDropdown ? (
+          <span style={{
+            padding: "4px 8px", color: c.fg3,
+            fontFamily: "Montserrat, sans-serif", fontSize: 12, fontWeight: 500,
+            whiteSpace: "nowrap", flexShrink: 0,
+          }}>{seg.label}</span>
+        ) : (
+          <button
+            onClick={(e) => handleSegClick(seg, e)}
+            title={isCompact ? seg.label : undefined}
+            style={{
+              display: "inline-flex", alignItems: "center", gap: 5,
+              padding: "4px 8px", borderRadius: 7,
+              border: 0, background: openSeg === seg.key ? c.primaryLightest : "transparent",
+              color: seg.isCurrent ? c.fg1 : c.fg2,
               fontFamily: "Montserrat, sans-serif",
-              fontSize: 12, fontWeight: 500,
-              whiteSpace: "nowrap",
-              flexShrink: 0,
-            }}>{seg.label}</span>
-          ) : (
-            <button
-              onClick={(e) => handleSegClick(seg, e)}
-              style={{
-                display: "inline-flex", alignItems: "center", gap: 5,
-                padding: "4px 8px", borderRadius: 7,
-                border: 0, background: openSeg === seg.key ? c.primaryLightest : "transparent",
-                color: seg.isCurrent ? c.fg1 : c.fg2,
-                fontFamily: "Montserrat, sans-serif",
-                fontSize: 12, fontWeight: seg.isCurrent ? 700 : 500,
-                cursor: "pointer",
-                maxWidth: 240,
-                minWidth: 0,
-                transition: "background 120ms ease",
-              }}
-              onMouseEnter={e => { if (openSeg !== seg.key) e.currentTarget.style.background = c.borderSoft; }}
-              onMouseLeave={e => { if (openSeg !== seg.key) e.currentTarget.style.background = "transparent"; }}
-            >
-              {seg.icon && <span style={{ fontSize: 13, flexShrink: 0 }}>{seg.icon}</span>}
+              fontSize: 12, fontWeight: seg.isCurrent ? 700 : 500,
+              cursor: "pointer",
+              maxWidth: isCompact ? 60 : 240,
+              minWidth: 0, flexShrink: 0,
+              transition: "background 120ms ease",
+            }}
+            onMouseEnter={e => { if (openSeg !== seg.key) e.currentTarget.style.background = c.borderSoft; }}
+            onMouseLeave={e => { if (openSeg !== seg.key) e.currentTarget.style.background = "transparent"; }}
+          >
+            {seg.icon && <span style={{ fontSize: 13, flexShrink: 0 }}>{seg.icon}</span>}
+            {isCompact ? (
+              <span style={{ color: c.fg3, fontSize: 12, lineHeight: 1, flexShrink: 0 }}>…</span>
+            ) : (
               <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {seg.label}
               </span>
-              <i className="ph ph-caret-down" style={{ fontSize: 10, color: c.fg3, flexShrink: 0 }} />
-            </button>
-          )}
-        </React.Fragment>
-      ))}
+            )}
+            <i className="ph ph-caret-down" style={{ fontSize: 10, color: c.fg3, flexShrink: 0 }} />
+          </button>
+        )}
+      </React.Fragment>
+    );
+  };
+
+  return (
+    <div ref={containerRef} data-bc="1" style={{
+      display: "flex", alignItems: "center", gap: 4,
+      minWidth: 0, flexWrap: "nowrap", overflow: "hidden",
+      position: "relative",
+    }}>
+      {/* Conteúdo visível — colapsa quando não cabe */}
+      {segments.map((seg, i) => renderSegment(seg, i, { compact: collapsed }))}
+
+      {/* Sombra invisível que mede a largura "ideal" (sempre full).
+         Posicionada absolutamente fora do fluxo de layout, mas dentro do contêiner
+         pra herdar fontes/spacing exatos. Aria-hidden + pointer-events none.
+         Reflowa quando segments mudam → recalcula collapsed. */}
+      <div
+        ref={measureRef}
+        aria-hidden="true"
+        style={{
+          position: "absolute", visibility: "hidden", pointerEvents: "none",
+          top: 0, left: 0, height: 0, overflow: "hidden",
+          display: "flex", alignItems: "center", gap: 4, whiteSpace: "nowrap",
+        }}
+      >
+        {segments.map((seg, i) => renderSegment(seg, i, { compact: false }))}
+      </div>
 
       {openSegment && ddRect && (
         <NestedMenu
@@ -2460,4 +2817,4 @@ const QueueBreadcrumb = ({
   );
 };
 
-Object.assign(window, { AtendimentosList, NovaConversaModal, QueueBreadcrumb });
+Object.assign(window, { AtendimentosList, NovaConversaModal, QueueBreadcrumb, StatusDropdown, STATUS_OPTIONS });

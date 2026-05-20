@@ -29,3 +29,37 @@ window.CCM = {
     canvas: "#f2f6fa",
   },
 };
+
+// Helper: distribui atendimentos por filas de forma determinística.
+// Como o dataset de demo não tem uma FK forte atendimento→fila, usamos hash
+// do id pra alocar cada atendimento numa fila-folha. Usado por:
+//   - AtendimentosList (filtrar lista quando favoritos ativos)
+//   - QueueSidebar (esconder filas vazias quando favoritos ativos)
+window.CCM.collectLeafQueues = (queues) => {
+  const leaves = [];
+  for (const q of queues) {
+    if (q.children?.length) {
+      for (const ch of q.children) leaves.push(ch);
+    } else {
+      leaves.push(q);
+    }
+  }
+  return leaves;
+};
+
+window.CCM.queueOfAtendimento = (atendimentoId, queues) => {
+  const leaves = window.CCM.collectLeafQueues(queues);
+  if (!leaves.length) return null;
+  let hash = 0;
+  const s = String(atendimentoId);
+  for (let i = 0; i < s.length; i++) hash = ((hash * 31) + s.charCodeAt(i)) >>> 0;
+  return leaves[hash % leaves.length].id;
+};
+
+// Conjunto de ids de fila-folha "aceitáveis" pra uma fila selecionada.
+// Se a fila tem filhos, retorna ids dos filhos; senão, só ela mesma.
+window.CCM.expandQueueLeaves = (queue) => {
+  if (!queue) return new Set();
+  if (queue.children?.length) return new Set(queue.children.map(c => c.id));
+  return new Set([queue.id]);
+};

@@ -450,6 +450,96 @@ window.CCM_DATA = (() => {
       ],
       status: "Aberto", slaTag: "+6h",
     },
+
+    // ─────────────────────────────────────────────
+    // Atendimentos antigos abertos — entram no Gantt como barras longas
+    // até a linha "HOJE" (01/01/2026 14:00). Reusam contatos/atendentes/mensagens
+    // existentes pra não precisar inflar mocks novos.
+    // ─────────────────────────────────────────────
+    {
+      id: "100501",
+      titulo: "Atendimento ao cliente — Ricardo Mendes",
+      dataInicio: "26/12/25 - 10:00",
+      marcadores: [{ label: "Pagamento", color: "#dd2e77" }],
+      contatos: [ricardo], atendentes: [attendant],
+      conversas: [
+        { id: "c100501a", channel: "whatsapp", status: "Aberta", time: "10:00",
+          contact: ricardo, fila: "🔥 Atendimento ao cliente",
+          preview: "Aguardo retorno sobre a 3ª parcela vencida.", unread: 2,
+          messages: messagesConvPagamento },
+      ],
+      status: "Aberto", slaTag: "-5d", tipo: "Atendimento ao cliente", tipoIcon: "🔥",
+    },
+    {
+      id: "100502",
+      titulo: "Atendimento ao cliente — Julia Rodrigues",
+      dataInicio: "27/12/25 - 14:30",
+      marcadores: [{ label: "Comercial", color: "#37B8FB" }],
+      contatos: [julia], atendentes: [bruno],
+      conversas: [
+        { id: "c100502a", channel: "email", status: "Aberta", time: "14:30",
+          contact: julia, fila: "💼 Fila Comercial",
+          preview: "Bruno, aguardo a apresentação dos planos enterprise.", unread: 1,
+          messages: msgs_57_a },
+      ],
+      status: "Aberto", slaTag: "-4d", tipo: "Atendimento ao cliente", tipoIcon: "💼",
+    },
+    {
+      id: "100503",
+      titulo: "Atendimento ao cliente — Marcos Ribeiro",
+      dataInicio: "28/12/25 - 09:15",
+      marcadores: [{ label: "Urgente", color: "#f54336" }],
+      contatos: [marcos], atendentes: [attendant],
+      conversas: [
+        { id: "c100503a", channel: "whatsapp", status: "Aberta", time: "09:15",
+          contact: marcos, fila: "🚨 Fila Emergencial",
+          preview: "Marcos, retornarei em até 2h com a confirmação.", unread: 3,
+          messages: msgs_51_a },
+      ],
+      status: "Pendente", slaTag: "-3d", tipo: "Atendimento ao cliente", tipoIcon: "🚨",
+    },
+    {
+      id: "100504",
+      titulo: "Atendimento ao cliente — Fernanda Costa",
+      dataInicio: "29/12/25 - 16:40",
+      marcadores: [{ label: "Pagamento", color: "#dd2e77" }],
+      contatos: [fernanda], atendentes: [diego],
+      conversas: [
+        { id: "c100504a", channel: "whatsapp", status: "Aberta", time: "16:40",
+          contact: fernanda, fila: "💰 Fila Financeiro",
+          preview: "Fernanda, segunda via enviada — confirma recebimento?", unread: 1,
+          messages: msgs_52_a },
+      ],
+      status: "Aberto", slaTag: "-2d", tipo: "Atendimento ao cliente", tipoIcon: "💰",
+    },
+    {
+      id: "100505",
+      titulo: "Atendimento ao cliente — Paulo Lucas",
+      dataInicio: "30/12/25 - 11:00",
+      marcadores: [],
+      contatos: [paulo], atendentes: [eduardo],
+      conversas: [
+        { id: "c100505a", channel: "whatsapp", status: "Aberta", time: "11:00",
+          contact: paulo, fila: "📦 Fila de Logística",
+          preview: "Paulo, código de rastreio BR9847263410.", unread: 0,
+          messages: msgs_53_a },
+      ],
+      status: "Aberto", slaTag: "-1d", tipo: "Atendimento ao cliente", tipoIcon: "📦",
+    },
+    {
+      id: "100506",
+      titulo: "Atendimento ao cliente — Jandilson Jesus",
+      dataInicio: "30/12/25 - 18:30",
+      marcadores: [{ label: "Pagamento", color: "#dd2e77" }],
+      contatos: [jandilson], atendentes: [attendant],
+      conversas: [
+        { id: "c100506a", channel: "sms", status: "Aberta", time: "18:30",
+          contact: jandilson, fila: "💰 Fila Financeiro",
+          preview: "Boleto reemitido — vencimento ajustado pra próxima sexta.", unread: 0,
+          messages: msgs_55_a },
+      ],
+      status: "Aberto", slaTag: "-1d", tipo: "Atendimento ao cliente", tipoIcon: "💰",
+    },
   ];
 
   // ─────────────────────────────────────────────

@@ -1,14 +1,26 @@
 // ConversaPanel.jsx — right side of detail: the open conversation thread
-const ConversaPanel = ({ conv, contact, attendant, atendimentoId, onTransfer, expanded, onToggleExpand, tab }) => {
+const ConversaPanel = ({
+  conv, contact, attendant, atendimentoId, onTransfer,
+  expanded, onToggleExpand, tab,
+  onOpenContact, onChangeQueue,
+  appliedMarkers = [], onOpenMarcadores,
+  convStatus, onFinalizeConversa,
+}) => {
   const c = window.CCM.c;
   const D = window.CCM_DATA;
   const [messages, setMessages] = React.useState(conv.messages);
   const [text, setText] = React.useState("");
   const [channel, setChannel] = React.useState(conv.channel === "email" ? "E-mail" : "WhatsApp");
-  const [showTags, setShowTags] = React.useState(false);
-  const [showInfo, setShowInfo] = React.useState(false);
-  const [showQueue, setShowQueue] = React.useState(false);
-  const [showBookmark, setShowBookmark] = React.useState(false);
+  const [confirmFinalize, setConfirmFinalize] = React.useState(false);
+  const effectiveStatus = convStatus || conv.status;
+  const isFinalized = effectiveStatus === "Finalizada" || effectiveStatus === "Finalizado";
+
+  // Helper: dispara o popover unificado de marcadores (mesmo de todos
+  // os pontos de entrada). Recebe um elemento DOM como âncora.
+  const openMarcadores = (el) => {
+    if (!onOpenMarcadores || !el) return;
+    onOpenMarcadores(el.getBoundingClientRect());
+  };
   const scrollRef = React.useRef(null);
 
   React.useEffect(() => { setMessages(conv.messages); }, [conv.id]);
@@ -29,9 +41,10 @@ const ConversaPanel = ({ conv, contact, attendant, atendimentoId, onTransfer, ex
 
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, minHeight: 0 }}>
-      {/* sub-header bar (conv-level) — title changes based on active tab */}
+      {/* sub-header bar (conv-level) — title changes based on active tab.
+          Altura 56 pra alinhar com a barra de tabs do lado esquerdo. */}
       <div style={{
-        height: 48, padding: "0 16px",
+        height: 56, padding: "0 16px",
         display: "flex", alignItems: "center", justifyContent: "space-between",
         borderBottom: `1px solid ${c.border}`, background: "#fff",
       }}>
@@ -62,20 +75,45 @@ const ConversaPanel = ({ conv, contact, attendant, atendimentoId, onTransfer, ex
             <React.Fragment>
               <i className="ph ph-chats-circle" style={{ fontSize: 16, color: c.fg2 }} />
               <span style={{ fontSize: 13, fontWeight: 600, color: c.fg1 }}>{conv.id}</span>
+              {/* Chips de marcadores — 2 visíveis + "+N" overflow.
+                  Todos os elementos (chips e "+N") abrem o MESMO popover
+                  unificado de marcadores. */}
+              <MarcadoresChipStrip
+                applied={appliedMarkers}
+                onOpen={openMarcadores}
+              />
             </React.Fragment>
           )}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-          <ToolbarBtn icon="ph-tag" onClick={() => setShowTags(true)} title="Marcadores" />
-          <ToolbarBtn icon="ph-user" onClick={() => setShowInfo(true)} title="Contato (CA)" />
-          <ToolbarBtn icon="ph-clipboard-text" onClick={() => setShowQueue(true)} title="Transferir para fila" />
-          <ToolbarBtn icon="ph-bookmark-simple" onClick={() => setShowBookmark(true)} title="Salvar conversa" />
-          <button title="Encerrar" style={{
-            width: 32, height: 32, borderRadius: 8, border: 0,
-            background: c.successPure, color: "#fff", cursor: "pointer",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            marginLeft: 4,
-          }}><i className="ph-fill ph-check" style={{ fontSize: 16 }} /></button>
+          <ToolbarBtn
+            icon="ph-tag"
+            onClick={(e) => openMarcadores(e.currentTarget)}
+            title="Marcadores"
+          />
+          <ToolbarBtn
+            icon="ph-user"
+            onClick={() => onOpenContact?.(contact)}
+            title={`Ver dados do contato${contact?.name ? " — " + contact.name : ""}`}
+          />
+          <ToolbarBtn
+            icon="ph-clipboard-text"
+            onClick={() => onChangeQueue?.()}
+            title="Alterar fila / atendente"
+          />
+          <button
+            title={isFinalized ? "Conversa finalizada" : "Finalizar conversa"}
+            disabled={isFinalized}
+            onClick={() => !isFinalized && setConfirmFinalize(true)}
+            style={{
+              width: 32, height: 32, borderRadius: 8, border: 0,
+              background: isFinalized ? c.borderSoft : c.successPure,
+              color: isFinalized ? c.fg3 : "#fff",
+              cursor: isFinalized ? "not-allowed" : "pointer",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              marginLeft: 4,
+              opacity: isFinalized ? 0.7 : 1,
+            }}><i className="ph-fill ph-check" style={{ fontSize: 16 }} /></button>
           <ToolbarBtn icon={expanded ? "ph-arrows-in" : "ph-arrows-out"} onClick={onToggleExpand} title="Expandir" />
         </div>
       </div>
@@ -95,8 +133,8 @@ const ConversaPanel = ({ conv, contact, attendant, atendimentoId, onTransfer, ex
         ))}
       </div>
 
-      {/* Composer — hidden in read-only history view */}
-      {tab === "Histórico" ? (
+      {/* Composer — escondido em abas read-only (Histórico e Contato) */}
+      {(tab === "Histórico" || tab === "Contato") ? (
         <div style={{
           background: "#fff", borderTop: `1px solid ${c.border}`,
           padding: "14px 20px", display: "flex", alignItems: "center", gap: 10,
@@ -104,25 +142,200 @@ const ConversaPanel = ({ conv, contact, attendant, atendimentoId, onTransfer, ex
         }}>
           <i className="ph ph-eye" style={{ fontSize: 16, color: c.primary }} />
           <span>
-            Visualização somente leitura. Para responder, volte para a aba <b style={{ color: c.fg1 }}>Conversas</b>.
+            {tab === "Histórico"
+              ? <>Visualização somente leitura. Para responder, volte para a aba <b style={{ color: c.fg1 }}>Conversas</b>.</>
+              : <>Visualização das mensagens deste contato. Para responder, volte para a aba <b style={{ color: c.fg1 }}>Conversas</b>.</>}
           </span>
         </div>
       ) : (
         <Composer text={text} setText={setText} channel={channel} setChannel={setChannel} onSend={send} />
       )}
 
-      {/* Popovers */}
-      {showTags && <Popover onClose={() => setShowTags(false)} title="Marcadores"
-        items={[
-          { label: "Pagamento", color: "#dd2e77" },
-          { label: "Cliente VIP", color: "#9240FF" },
-          { label: "Urgente", color: "#f54336" },
-          { label: "Comercial", color: "#37B8FB" },
-          { label: "Pendência", color: "#f99f18" },
-        ]} />}
-      {showInfo && <ContactInfoPopover contact={contact} onClose={() => setShowInfo(false)} onTransfer={onTransfer} />}
-      {showQueue && <QueuePopover onClose={() => setShowQueue(false)} onTransfer={onTransfer} />}
-      {showBookmark && <BookmarkPopover onClose={() => setShowBookmark(false)} />}
+      {confirmFinalize && (
+        <FinalizarConversaModal
+          conv={conv}
+          onCancel={() => setConfirmFinalize(false)}
+          onConfirm={() => {
+            onFinalizeConversa?.(conv.id);
+            setConfirmFinalize(false);
+          }}
+        />
+      )}
+    </div>
+  );
+};
+
+// ─────────────────────────────────────────────
+// FinalizarConversaModal — confirmação destrutiva
+// ─────────────────────────────────────────────
+const FinalizarConversaModal = ({ conv, onCancel, onConfirm }) => {
+  const c = window.CCM.c;
+  React.useEffect(() => {
+    const h = (e) => { if (e.key === "Escape") onCancel(); };
+    document.addEventListener("keydown", h);
+    return () => document.removeEventListener("keydown", h);
+  }, [onCancel]);
+
+  return ReactDOM.createPortal(
+    <div
+      onClick={onCancel}
+      style={{
+        position: "fixed", inset: 0, zIndex: 11000,
+        background: "rgba(40,41,61,0.45)",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        fontFamily: "Montserrat, sans-serif",
+      }}
+    >
+      <div
+        onClick={e => e.stopPropagation()}
+        style={{
+          background: "#fff", borderRadius: 16,
+          width: "min(440px, 92vw)",
+          boxShadow: "0 20px 60px rgba(40,41,61,0.30)",
+          padding: 24,
+        }}
+      >
+        <div style={{
+          width: 48, height: 48, borderRadius: "50%",
+          background: c.successLight, color: c.successDark,
+          display: "flex", alignItems: "center", justifyContent: "center",
+          marginBottom: 14,
+        }}>
+          <i className="ph-fill ph-check-circle" style={{ fontSize: 24 }} />
+        </div>
+        <div style={{ fontSize: 17, fontWeight: 700, color: c.fg1, marginBottom: 8 }}>
+          Finalizar esta conversa?
+        </div>
+        <div style={{ fontSize: 13, color: c.fg2, lineHeight: 1.5, marginBottom: 22 }}>
+          A conversa <b style={{ color: c.fg1 }}>#{conv.id}</b> será encerrada e seu status mudará para <b style={{ color: c.fg1 }}>Finalizada</b>. Você ainda poderá visualizar o histórico, mas não poderá enviar novas mensagens.
+        </div>
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
+          <button
+            onClick={onCancel}
+            style={{
+              border: `1px solid ${c.border}`, background: "#fff",
+              padding: "9px 18px", borderRadius: 10,
+              fontSize: 13, fontWeight: 600, color: c.fg1,
+              cursor: "pointer", fontFamily: "Montserrat, sans-serif",
+            }}
+          >Cancelar</button>
+          <button
+            onClick={onConfirm}
+            style={{
+              border: 0, background: c.successPure, color: "#fff",
+              padding: "9px 20px", borderRadius: 10,
+              fontSize: 13, fontWeight: 700,
+              cursor: "pointer", fontFamily: "Montserrat, sans-serif",
+              display: "inline-flex", alignItems: "center", gap: 6,
+            }}
+          >
+            <i className="ph-fill ph-check" style={{ fontSize: 14 }} />
+            Sim, finalizar
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+};
+
+// ─────────────────────────────────────────────
+// MarcadoresChipStrip — chips compactos com overflow "+N"
+// Decisão: 2 chips visíveis, resto vira "+N" cinza. Click em qualquer
+// chip ou no "+N" abre o popover unificado. "+N" tem tooltip dark
+// com "mais N marcadores aplicados".
+// ─────────────────────────────────────────────
+const MAX_VISIBLE_CHIPS = 2;
+
+const MarcadoresChipStrip = ({ applied, onOpen }) => {
+  const c = window.CCM.c;
+  const [overflowHover, setOverflowHover] = React.useState(false);
+  const [overflowRect, setOverflowRect] = React.useState(null);
+  const overflowRef = React.useRef(null);
+
+  if (!applied || applied.length === 0) {
+    // Estado vazio — pílula sutil "+ Marcador" que abre o popover
+    return (
+      <button
+        onClick={(e) => onOpen(e.currentTarget)}
+        title="Adicionar marcador"
+        style={{
+          marginLeft: 4, border: `1px dashed ${c.border}`,
+          background: "transparent", color: c.fg3,
+          fontSize: 11, fontWeight: 500, padding: "3px 10px",
+          borderRadius: 999, cursor: "pointer",
+          fontFamily: "Montserrat, sans-serif",
+          transition: "background 120ms ease, color 120ms ease, border-color 120ms ease",
+        }}
+        onMouseEnter={e => { e.currentTarget.style.background = c.primaryLightest; e.currentTarget.style.color = c.primary; e.currentTarget.style.borderColor = c.primaryLight; }}
+        onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = c.fg3; e.currentTarget.style.borderColor = c.border; }}
+      >
+        + Marcador
+      </button>
+    );
+  }
+
+  const visible = applied.slice(0, MAX_VISIBLE_CHIPS);
+  const hidden = applied.slice(MAX_VISIBLE_CHIPS);
+
+  React.useEffect(() => {
+    if (overflowHover && overflowRef.current) {
+      const r = overflowRef.current.getBoundingClientRect();
+      setOverflowRect({ top: r.bottom + 6, left: r.left + r.width / 2 });
+    } else {
+      setOverflowRect(null);
+    }
+  }, [overflowHover]);
+
+  return (
+    <div style={{ display: "inline-flex", alignItems: "center", gap: 4, marginLeft: 6 }}>
+      {visible.map(m => (
+        <button
+          key={m.label}
+          onClick={(e) => onOpen(e.currentTarget)}
+          style={{
+            background: m.color + "14", color: m.color, border: 0,
+            fontSize: 10, fontWeight: 600, padding: "3px 10px", borderRadius: 999,
+            cursor: "pointer", fontFamily: "Montserrat, sans-serif",
+            transition: "filter 120ms ease",
+            maxWidth: 110, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+          }}
+          onMouseEnter={e => e.currentTarget.style.filter = "brightness(0.95)"}
+          onMouseLeave={e => e.currentTarget.style.filter = "none"}
+          title={m.label}
+        >{m.label}</button>
+      ))}
+      {hidden.length > 0 && (
+        <button
+          ref={overflowRef}
+          onClick={(e) => onOpen(e.currentTarget)}
+          onMouseEnter={() => setOverflowHover(true)}
+          onMouseLeave={() => setOverflowHover(false)}
+          style={{
+            background: window.CCM.c.borderSoft, color: window.CCM.c.fg2, border: 0,
+            fontSize: 10, fontWeight: 700, padding: "3px 9px", borderRadius: 999,
+            cursor: "pointer", fontFamily: "Montserrat, sans-serif",
+          }}
+        >+{hidden.length}</button>
+      )}
+      {overflowHover && overflowRect && ReactDOM.createPortal(
+        <div style={{
+          position: "fixed",
+          top: overflowRect.top, left: overflowRect.left,
+          transform: "translateX(-50%)",
+          background: "#28293d", color: "#fff",
+          padding: "6px 10px", borderRadius: 6,
+          fontSize: 12, fontWeight: 500,
+          whiteSpace: "nowrap",
+          boxShadow: "0 4px 12px rgba(40,41,61,0.18)",
+          pointerEvents: "none",
+          zIndex: 10002,
+          fontFamily: "Montserrat, sans-serif",
+        }}>
+          mais {hidden.length} {hidden.length === 1 ? "marcador aplicado" : "marcadores aplicados"}
+        </div>,
+        document.body
+      )}
     </div>
   );
 };

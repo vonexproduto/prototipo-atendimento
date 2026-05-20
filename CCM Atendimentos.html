@@ -23,14 +23,15 @@
 <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
 <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
 
-<script src="src/tokens.js"></script>
-<script src="src/data.js?v=2"></script>
+<script src="src/tokens.js?v=2"></script>
+<script src="src/data.js?v=3"></script>
 <script src="src/demo-router.js"></script>
-<script type="text/babel" src="src/Header.jsx?v=2"></script>
-<script type="text/babel" src="src/QueueSidebar.jsx?v=10"></script>
-<script type="text/babel" src="src/AtendimentosList.jsx?v=12"></script>
-<script type="text/babel" src="src/ConversaPanel.jsx?v=6"></script>
-<script type="text/babel" src="src/AtendimentoDetail.jsx?v=8"></script>
+<script type="text/babel" src="src/SettingsMenu.jsx?v=3"></script>
+<script type="text/babel" src="src/Header.jsx?v=3"></script>
+<script type="text/babel" src="src/QueueSidebar.jsx?v=19"></script>
+<script type="text/babel" src="src/AtendimentosList.jsx?v=22"></script>
+<script type="text/babel" src="src/ConversaPanel.jsx?v=11"></script>
+<script type="text/babel" src="src/AtendimentoDetail.jsx?v=14"></script>
 <script type="text/babel" src="src/JornadasView.jsx?v=2"></script>
 <script type="text/babel" src="src/DashboardView.jsx?v=1"></script>
 
@@ -130,6 +131,34 @@ const App = () => {
   );
   const [activeNav, setActiveNav] = React.useState("Chat");
 
+  // viewScope: "all" mostra todos os atendimentos; "mine" só os do atendente logado.
+  // Persiste na sessão via localStorage pra UX consistente.
+  const [viewScope, setViewScope] = React.useState(() => {
+    try { return localStorage.getItem("ccm.viewScope") || "all"; } catch { return "all"; }
+  });
+  React.useEffect(() => {
+    try { localStorage.setItem("ccm.viewScope", viewScope); } catch {}
+  }, [viewScope]);
+
+  // Favoritos vivem no nível do App (não dentro da AtendimentosList) pra que
+  // a estrelinha-toggle apareça na QueueSidebar e o estado persista entre
+  // trocas de fila. Set de IDs em localStorage.
+  const [favoritedIds, setFavoritedIds] = React.useState(() => {
+    try { return new Set(JSON.parse(localStorage.getItem("ccm.favorites") || "[]")); }
+    catch { return new Set(); }
+  });
+  const [favoritesOnly, setFavoritesOnly] = React.useState(false);
+  React.useEffect(() => {
+    try { localStorage.setItem("ccm.favorites", JSON.stringify([...favoritedIds])); } catch {}
+  }, [favoritedIds]);
+  const toggleFavorite = React.useCallback((id) => {
+    setFavoritedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }, []);
+
   const queue = D.queues.flatMap(q => q.children ? [q, ...q.children] : [q])
                         .find(q => q.id === activeQueue);
 
@@ -172,12 +201,23 @@ const App = () => {
           onSelectQueue={setActiveQueue}
           chatTab={chatTab}
           onTabChange={handleTabChange}
+          onOpenAtendimento={openPeek}
+          viewScope={viewScope}
+          onScopeChange={setViewScope}
+          favoritesOnly={favoritesOnly}
+          onFavoritesOnlyChange={setFavoritesOnly}
+          favoritesCount={favoritedIds.size}
+          favoritedIds={favoritedIds}
         />
         <AtendimentosList
           queue={queue}
           queues={D.queues}
           onSelectQueue={switchQueueAndClose}
-          onOpenAtendimento={openPeek} />
+          onOpenAtendimento={openPeek}
+          viewScope={viewScope}
+          favoritedIds={favoritedIds}
+          toggleFavorite={toggleFavorite}
+          favoritesOnly={favoritesOnly} />
         {openAtendimento?.mode === "peek" && (
           <PeekOverlay onClose={closeAtendimento}>
             <AtendimentoDetail
