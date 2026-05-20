@@ -6,8 +6,10 @@ const QUEUE_SIDEBAR_DEFAULT = 340;
 const QueueSidebar = ({
   activeQueueId, onSelectQueue, chatTab = "atendimentos", onTabChange, onOpenAtendimento,
   viewScope = "all", onScopeChange,
-  favoritesOnly = false, onFavoritesOnlyChange, favoritesCount = 0, favoritedIds,
+  favoritesCount = 0, favoritedIds,
 }) => {
+  // Favoritos só são "o filtro ativo" quando viewScope === "favorites"
+  const favoritesOnly = viewScope === "favorites";
   const c = window.CCM.c;
   const D = window.CCM_DATA;
   const [expanded, setExpanded] = React.useState({ "operacao-suporte": true });
@@ -67,11 +69,10 @@ const QueueSidebar = ({
           </div>
           {/* Actions */}
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <ScopeToggle scope={viewScope} onChange={onScopeChange} />
-            <FavoritesToggle
-              active={favoritesOnly}
-              count={favoritesCount}
-              onClick={() => onFavoritesOnlyChange?.(!favoritesOnly)}
+            <ScopeToggle
+              scope={viewScope}
+              onChange={onScopeChange}
+              favoritesCount={favoritesCount}
             />
             <button
               ref={searchBtnRef}
@@ -238,7 +239,7 @@ const QueuesTree = ({
 // Decisão de design: muito discreto — bg cinza claro, item ativo vira card
 // branco com sombra mínima. Ícones-only, tooltip nativo via title=.
 // ─────────────────────────────────────────────
-const ScopeToggleButton = ({ active, onClick, icon, tooltip, color }) => {
+const ScopeToggleButton = ({ active, onClick, icon, tooltip, badge, activeColor, activeBg }) => {
   const c = window.CCM.c;
   const ref = React.useRef(null);
   const [hover, setHover] = React.useState(false);
@@ -249,6 +250,10 @@ const ScopeToggleButton = ({ active, onClick, icon, tooltip, color }) => {
     const r = ref.current.getBoundingClientRect();
     setPos({ top: r.bottom + 8, left: r.left + r.width / 2 });
   }, [hover]);
+
+  const colorOnActive = activeColor || c.primary;
+  const bgOnActive = activeBg || "#fff";
+  const iconFilled = active && icon === "ph-star"; // estrela fica preenchida quando ativa
 
   return (
     <React.Fragment>
@@ -267,9 +272,10 @@ const ScopeToggleButton = ({ active, onClick, icon, tooltip, color }) => {
           if (!active) e.currentTarget.style.color = c.fg3;
         }}
         style={{
+          position: "relative",
           width: 26, height: 26, borderRadius: 6, border: 0,
-          background: active ? "#fff" : "transparent",
-          color: active ? c.primary : c.fg3,
+          background: active ? bgOnActive : "transparent",
+          color: active ? colorOnActive : c.fg3,
           boxShadow: active ? "0 1px 2px rgba(40,41,61,0.10)" : "none",
           cursor: "pointer",
           display: "flex", alignItems: "center", justifyContent: "center",
@@ -277,7 +283,19 @@ const ScopeToggleButton = ({ active, onClick, icon, tooltip, color }) => {
           fontFamily: "Montserrat, sans-serif",
         }}
       >
-        <i className={`ph ${icon}`} style={{ fontSize: 14 }} />
+        <i className={`ph${iconFilled ? "-fill" : ""} ${icon}`} style={{ fontSize: 14 }} />
+        {badge != null && badge > 0 && (
+          <span style={{
+            position: "absolute", top: -4, right: -4,
+            background: active ? colorOnActive : c.fg2,
+            color: "#fff", fontSize: 9, fontWeight: 700,
+            minWidth: 14, height: 14, padding: "0 4px",
+            borderRadius: 999,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            border: "2px solid " + (active ? bgOnActive : c.borderSoft),
+            lineHeight: 1,
+          }}>{badge}</span>
+        )}
       </button>
       {hover && pos && ReactDOM.createPortal(
         <div style={{
@@ -301,85 +319,16 @@ const ScopeToggleButton = ({ active, onClick, icon, tooltip, color }) => {
   );
 };
 
-// ─────────────────────────────────────────────
-// FavoritesToggle — estrela única que filtra para "só favoritos"
-// Mora ao lado do ScopeToggle. Tooltip dark portalado pro body.
-// Quando ativo, fica preenchida em laranja com badge da contagem.
-// ─────────────────────────────────────────────
-const FavoritesToggle = ({ active, count, onClick }) => {
-  const c = window.CCM.c;
-  const ref = React.useRef(null);
-  const [hover, setHover] = React.useState(false);
-  const [pos, setPos] = React.useState(null);
-
-  React.useEffect(() => {
-    if (!hover || !ref.current) { setPos(null); return; }
-    const r = ref.current.getBoundingClientRect();
-    setPos({ top: r.bottom + 8, left: r.left + r.width / 2 });
-  }, [hover]);
-
-  const tooltip = active ? "Mostrar todos os atendimentos" : "Ver só meus favoritos";
-
-  return (
-    <React.Fragment>
-      <button
-        ref={ref}
-        type="button"
-        onClick={onClick}
-        onMouseEnter={() => setHover(true)}
-        onMouseLeave={() => setHover(false)}
-        aria-pressed={active}
-        aria-label={tooltip}
-        style={{
-          position: "relative",
-          width: 30, height: 30, borderRadius: 8, border: 0,
-          background: active ? "#fff4e0" : "transparent",
-          color: active ? "#f5a623" : c.fg2,
-          cursor: "pointer",
-          display: "flex", alignItems: "center", justifyContent: "center",
-          transition: "background 150ms ease, color 150ms ease",
-          flexShrink: 0,
-        }}
-      >
-        <i className={`ph${active ? "-fill" : ""} ph-star`} style={{ fontSize: 16 }} />
-        {count > 0 && (
-          <span style={{
-            position: "absolute", top: -2, right: -2,
-            background: active ? "#f5a623" : c.fg2,
-            color: "#fff", fontSize: 9, fontWeight: 700,
-            minWidth: 14, height: 14, padding: "0 4px",
-            borderRadius: 999,
-            display: "flex", alignItems: "center", justifyContent: "center",
-            border: "2px solid #fff",
-            lineHeight: 1,
-          }}>{count}</span>
-        )}
-      </button>
-      {hover && pos && ReactDOM.createPortal(
-        <div style={{
-          position: "fixed",
-          top: pos.top, left: pos.left,
-          transform: "translateX(-50%)",
-          background: "#28293d", color: "#fff",
-          padding: "6px 10px", borderRadius: 6,
-          fontSize: 12, fontWeight: 500,
-          whiteSpace: "nowrap",
-          boxShadow: "0 4px 12px rgba(40,41,61,0.18)",
-          pointerEvents: "none",
-          zIndex: 10002,
-          fontFamily: "Montserrat, sans-serif",
-        }}>{tooltip}</div>,
-        document.body
-      )}
-    </React.Fragment>
-  );
-};
-
-const ScopeToggle = ({ scope = "all", onChange }) => {
+// Segmented control com 3 opções mutuamente exclusivas:
+//   Meus | Todos | Favoritos
+// "Favoritos" mostra o badge de contagem e usa cor laranja quando ativo.
+const ScopeToggle = ({ scope = "all", onChange, favoritesCount = 0 }) => {
   const c = window.CCM.c;
   const items = [
-    { v: "mine", icon: "ph-user",  tooltip: "Somente os meus atendimentos" },
-    { v: "all",  icon: "ph-users", tooltip: "Todos os atendimentos" },
+    { v: "mine",      icon: "ph-user",  tooltip: "Somente os meus atendimentos" },
+    { v: "all",       icon: "ph-users", tooltip: "Todos os atendimentos" },
+    { v: "favorites", icon: "ph-star",  tooltip: "Apenas meus favoritos",
+      activeColor: "#f5a623", activeBg: "#fff4e0", badge: favoritesCount },
   ];
   return (
     <div style={{
@@ -396,6 +345,9 @@ const ScopeToggle = ({ scope = "all", onChange }) => {
           onClick={() => onChange?.(it.v)}
           icon={it.icon}
           tooltip={it.tooltip}
+          badge={it.badge}
+          activeColor={it.activeColor}
+          activeBg={it.activeBg}
         />
       ))}
     </div>

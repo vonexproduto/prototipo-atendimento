@@ -46,8 +46,10 @@ const IconLabelButton = ({ icon, label, hovered, onHoverChange, active, onClick,
 const AtendimentosList = ({
   queue, queues, onSelectQueue, onOpenAtendimento,
   viewScope = "all",
-  favoritedIds, toggleFavorite, favoritesOnly = false,
+  favoritedIds, toggleFavorite,
 }) => {
+  // Favoritos é uma das opções mutuamente exclusivas do segmented control.
+  const favoritesOnly = viewScope === "favorites";
   const c = window.CCM.c;
   const D = window.CCM_DATA;
   const demo = window.CCM_DEMO_STATE || {};
