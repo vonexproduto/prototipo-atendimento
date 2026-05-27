@@ -136,6 +136,46 @@ const ContatoHistoricoPeek = ({
     );
   }
 
+  // ── Filtro por fila — multi-select de filas ativas; mensagens fora
+  // das filas selecionadas dimam e as de dentro "brilham" (drop-shadow roxo).
+  // Vazio = nenhum filtro aplicado, tudo renderiza normal.
+  const [activeFilas, setActiveFilas] = React.useState(() => new Set());
+  const toggleFila = (fila) => {
+    setActiveFilas(prev => {
+      const next = new Set(prev);
+      if (next.has(fila)) next.delete(fila);
+      else next.add(fila);
+      return next;
+    });
+  };
+
+  // Mapa convId → fila (lookup O(1) ao renderizar cada mensagem).
+  const filaByConvId = React.useMemo(() => {
+    const map = {};
+    for (const cv of conversas) {
+      if (cv.id && cv.fila) map[cv.id] = cv.fila;
+    }
+    return map;
+  }, [conversas]);
+
+  // Lista de filas únicas com contagens (msgs + conversas) pra montar a seção.
+  const filasSummary = React.useMemo(() => {
+    const acc = {};
+    for (const cv of conversas) {
+      if (!cv.fila) continue;
+      const e = acc[cv.fila] || (acc[cv.fila] = { fila: cv.fila, msgs: 0, convs: 0 });
+      e.convs += 1;
+      e.msgs += (cv.messages || []).filter(m => m.text && !m.type).length;
+    }
+    return Object.values(acc).sort((a, b) => b.msgs - a.msgs);
+  }, [conversas]);
+
+  // Helper: atendimento matcha o filtro ativo? (usado pra dimar marcador)
+  const atendimentoMatchesFilter = React.useCallback((atId) => {
+    if (activeFilas.size === 0) return true;
+    return conversas.some(cv => cv.atendimentoId === atId && activeFilas.has(cv.fila));
+  }, [conversas, activeFilas]);
+
   // Totais por canal e participantes (extraídos do agregado pra montar a coluna
   // esquerda igual ao card da aba Histórico do atendimento).
   const byChannel = realMsgs.reduce((acc, m) => {
@@ -284,10 +324,50 @@ const ContatoHistoricoPeek = ({
                 <div style={{ fontSize: 10, fontWeight: 700, color: c.fg3, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>
                   Atendentes
                 </div>
-                <div>
+                <div style={{ marginBottom: 12 }}>
                   {Object.keys(byAtendente).length > 0
                     ? <PeopleList map={byAtendente} personByInitials={personByInitials} />
                     : <div style={{ fontSize: 11, color: c.fg3, fontStyle: "italic" }}>Nenhum atendente registrado.</div>}
+                </div>
+
+                <div style={{
+                  display: "flex", alignItems: "center", justifyContent: "space-between",
+                  marginBottom: 6,
+                }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: c.fg3, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                    Filas de atendimento
+                  </div>
+                  {activeFilas.size > 0 && (
+                    <button
+                      onClick={() => setActiveFilas(new Set())}
+                      title="Limpar filtros de fila"
+                      style={{
+                        border: 0, background: "transparent",
+                        color: c.primary, cursor: "pointer",
+                        fontSize: 10, fontWeight: 700,
+                        fontFamily: "Montserrat, sans-serif",
+                        padding: 0,
+                      }}
+                    >Limpar</button>
+                  )}
+                </div>
+                <div>
+                  {filasSummary.length === 0 && (
+                    <div style={{ fontSize: 11, color: c.fg3, fontStyle: "italic" }}>Nenhuma fila registrada.</div>
+                  )}
+                  {filasSummary.map(({ fila, msgs, convs }) => {
+                    const active = activeFilas.has(fila);
+                    return (
+                      <FilaFilterRow
+                        key={fila}
+                        fila={fila}
+                        msgs={msgs}
+                        convs={convs}
+                        active={active}
+                        onToggle={() => toggleFila(fila)}
+                      />
+                    );
+                  })}
                 </div>
               </div>
 
@@ -473,22 +553,47 @@ const ContatoHistoricoPeek = ({
             {(() => {
               // Insere marcador "Atendimento #ID" antes do primeiro msg
               // de cada grupo de atendimento. Marcadores são âncoras pro scroll.
+              // Cada mensagem vai num wrapper que reage ao filtro de filas:
+              //   - dentro de fila ativa  → glow roxo + scale leve
+              //   - fora de fila ativa    → opacity 0.22 + grayscale
+              const hasFilter = activeFilas.size > 0;
               let lastAt = null;
               const nodes = [];
               for (const m of allMessages) {
                 if (m.atendimentoId && m.atendimentoId !== lastAt) {
                   const at = atendimentos.find(x => x.id === m.atendimentoId);
+                  const atDimmed = hasFilter && !atendimentoMatchesFilter(m.atendimentoId);
                   nodes.push(
                     <AtendimentoMarker
                       key={`mk-${m.atendimentoId}`}
                       atendimento={at}
                       highlighted={highlightedAtId === m.atendimentoId}
+                      dimmed={atDimmed}
                     />
                   );
                   lastAt = m.atendimentoId;
                 }
+                const msgFila = filaByConvId[m.convId];
+                const matchesFila = !hasFilter || (msgFila && activeFilas.has(msgFila));
+                const wrapStyle = !hasFilter
+                  ? { display: "flex", flexDirection: "column" }
+                  : matchesFila
+                    ? {
+                        display: "flex", flexDirection: "column",
+                        filter: "drop-shadow(0 0 6px rgba(146,64,255,0.55)) drop-shadow(0 2px 6px rgba(146,64,255,0.25))",
+                        transform: "scale(1.015)",
+                        transition: "filter 280ms ease, transform 280ms ease, opacity 280ms ease",
+                      }
+                    : {
+                        display: "flex", flexDirection: "column",
+                        opacity: 0.22,
+                        filter: "grayscale(0.5)",
+                        transition: "filter 280ms ease, transform 280ms ease, opacity 280ms ease",
+                      };
                 nodes.push(
-                  <window.MessageBubble key={m.id} msg={m} contact={contact} attendant={attendant} />
+                  <div key={m.id} style={wrapStyle}>
+                    <window.MessageBubble msg={m} contact={contact} attendant={attendant} />
+                  </div>
                 );
               }
               return nodes;
@@ -515,7 +620,9 @@ const ContatoHistoricoPeek = ({
 
 // Marcador inline entre grupos de mensagens — também serve de âncora pro scroll.
 // Quando highlighted=true, "pulsa" em destaque por ~1.8s pra confirmar a navegação.
-const AtendimentoMarker = ({ atendimento, highlighted }) => {
+// Quando dimmed=true (filtro de fila ativo + nenhuma conv do atendimento bate),
+// reduz opacidade pra sair do foco visual.
+const AtendimentoMarker = ({ atendimento, highlighted, dimmed }) => {
   const c = window.CCM.c;
   if (!atendimento) return null;
   return (
@@ -525,6 +632,8 @@ const AtendimentoMarker = ({ atendimento, highlighted }) => {
         display: "flex", alignItems: "center", gap: 8,
         padding: "6px 0",
         scrollMarginTop: 16,
+        opacity: dimmed && !highlighted ? 0.3 : 1,
+        transition: "opacity 280ms ease",
       }}
     >
       <div style={{ flex: 1, height: 1, background: c.borderSoft, opacity: 0.7 }} />
@@ -552,6 +661,64 @@ const AtendimentoMarker = ({ atendimento, highlighted }) => {
         )}
       </div>
       <div style={{ flex: 1, height: 1, background: c.borderSoft, opacity: 0.7 }} />
+    </div>
+  );
+};
+
+// Linha de fila com toggle de filtro. Quando active=true, vira pill roxa
+// "filtrando"; quando inactive, mostra o ícone de funil sutil que aparece no
+// hover (e fica sempre visível em telas touch via opacity baseline).
+const FilaFilterRow = ({ fila, msgs, convs, active, onToggle }) => {
+  const c = window.CCM.c;
+  const [hover, setHover] = React.useState(false);
+  // Separa emoji-prefixo do nome ("🔥 Atendimento ao cliente" → 🔥 + nome)
+  const m = (fila || "").match(/^(\S+)\s+(.+)$/);
+  const icon = m ? m[1] : "";
+  const name = m ? m[2] : fila;
+  return (
+    <div
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      onClick={onToggle}
+      title={active ? "Remover filtro desta fila" : "Filtrar mensagens desta fila"}
+      style={{
+        display: "flex", alignItems: "center", gap: 8,
+        padding: "6px 8px", borderRadius: 8,
+        cursor: "pointer",
+        background: active ? c.primaryLightest : (hover ? c.borderSoft : "transparent"),
+        border: `1px solid ${active ? c.primaryLight : "transparent"}`,
+        marginBottom: 4,
+        transition: "background 150ms ease, border-color 150ms ease",
+      }}
+    >
+      <span style={{
+        fontSize: 14, width: 18, textAlign: "center", flexShrink: 0,
+      }}>{icon || "—"}</span>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{
+          fontSize: 11,
+          fontWeight: active ? 700 : 500,
+          color: active ? c.primary : c.fg1,
+          whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+        }}>{name}</div>
+        <div style={{ fontSize: 9, color: c.fg3, marginTop: 1 }}>
+          {msgs} {msgs === 1 ? "msg" : "msgs"} · {convs} {convs === 1 ? "conv" : "convs"}
+        </div>
+      </div>
+      <span
+        aria-hidden
+        style={{
+          width: 22, height: 22, borderRadius: 6,
+          display: "flex", alignItems: "center", justifyContent: "center",
+          background: active ? c.primary : (hover ? "#fff" : "transparent"),
+          color: active ? "#fff" : c.fg2,
+          border: active ? "none" : (hover ? `1px solid ${c.border}` : "1px solid transparent"),
+          flexShrink: 0,
+          transition: "background 150ms ease, color 150ms ease, border-color 150ms ease",
+        }}
+      >
+        <i className={active ? "ph-fill ph-funnel-simple" : "ph ph-funnel-simple"} style={{ fontSize: 12 }} />
+      </span>
     </div>
   );
 };
