@@ -18,6 +18,10 @@ const AtendimentoDetail = ({
   const [marcadoresPop, setMarcadoresPop] = React.useState(null); // { top, left }
   const [contatoPanel, setContatoPanel] = React.useState(null);    // contact object
   const [contatoExpanded, setContatoExpanded] = React.useState(false);
+  // Peek de Histórico do contato (overlay fixo). Acionado pelas hover-actions
+  // do PessoasPopover de contatos. Independe do ContatoSidePanel acima.
+  const [contatoHistorico, setContatoHistorico] = React.useState(null); // contact
+  const [contatoHistoricoExpanded, setContatoHistoricoExpanded] = React.useState(false);
   const [contatosPop, setContatosPop] = React.useState(null);     // { top, left }
   const [atendentesPop, setAtendentesPop] = React.useState(null); // { top, left }
   const [currentFila, setCurrentFila] = React.useState(a.tipo || "Atendimento ao cliente");
@@ -317,7 +321,8 @@ const AtendimentoDetail = ({
           pos={contatosPop}
           title="Contatos do atendimento"
           people={a.contatos}
-          onSelect={(ct) => { setContatoPanel(ct); setContatosPop(null); }}
+          onSelectHistorico={(ct) => { setContatoHistorico(ct); setContatoHistoricoExpanded(false); setContatosPop(null); }}
+          onSelectDados={(ct) => { setContatoPanel(ct); setContatosPop(null); }}
           onClose={() => setContatosPop(null)}
         />
       )}
@@ -348,6 +353,15 @@ const AtendimentoDetail = ({
           expanded={contatoExpanded}
           onToggleExpand={() => setContatoExpanded(e => !e)}
           onClose={() => { setContatoPanel(null); setContatoExpanded(false); }}
+        />
+      )}
+
+      {contatoHistorico && window.ContatoHistoricoPeek && (
+        <window.ContatoHistoricoPeek
+          contactId={contatoHistorico.id}
+          expanded={contatoHistoricoExpanded}
+          onClose={() => { setContatoHistorico(null); setContatoHistoricoExpanded(false); }}
+          onToggleExpand={() => setContatoHistoricoExpanded(e => !e)}
         />
       )}
     </main>
@@ -401,9 +415,14 @@ const AvatarStackHeader = ({ list, maxVisible = 3 }) => {
 
 // ─────────────────────────────────────────────
 // PessoasPopover — lista contatos OU atendentes do atendimento
-// Click num nome → callback (no caso de contatos, abre ContatoSidePanel)
+//
+// Modos:
+//   • selectable=false (atendentes): só nome, sem ações.
+//   • onSelectHistorico+onSelectDados (contatos): hover na linha revela 2
+//     botões (Histórico de mensagens / Dados do contato).
+//   • onSelect (legado): click na linha dispara handler único.
 // ─────────────────────────────────────────────
-const PessoasPopover = ({ pos, title, people, onSelect, onClose, selectable = true }) => {
+const PessoasPopover = ({ pos, title, people, onSelect, onSelectHistorico, onSelectDados, onClose, selectable = true }) => {
   const c = window.CCM.c;
   React.useEffect(() => {
     const h = (e) => { if (!e.target.closest("[data-pessoas-pop]")) onClose(); };
@@ -411,8 +430,9 @@ const PessoasPopover = ({ pos, title, people, onSelect, onClose, selectable = tr
     return () => document.removeEventListener("mousedown", h);
   }, [onClose]);
 
-  // Clamp ao viewport pra não cortar
-  const popWidth = 280;
+  const hasDualActions = !!(onSelectHistorico && onSelectDados);
+  // Wider quando temos 2 botões pra caber sem espremer o nome.
+  const popWidth = hasDualActions ? 360 : 280;
   const left = Math.min(pos.left, window.innerWidth - popWidth - 12);
 
   return ReactDOM.createPortal(
@@ -437,40 +457,114 @@ const PessoasPopover = ({ pos, title, people, onSelect, onClose, selectable = tr
       </div>
       <div style={{ maxHeight: 320, overflowY: "auto" }}>
         {people.map((p, i) => (
-          <div key={i}
-            onClick={() => selectable && onSelect?.(p)}
-            style={{
-              display: "flex", alignItems: "center", gap: 10,
-              padding: "8px 14px",
-              cursor: selectable ? "pointer" : "default",
-              transition: "background 120ms ease",
-            }}
-            onMouseEnter={e => { if (selectable) e.currentTarget.style.background = c.borderSoft; }}
-            onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
-          >
-            <span style={{
-              width: 28, height: 28, borderRadius: "50%",
-              background: p.bg, color: p.fg, fontSize: 10, fontWeight: 700,
-              display: "flex", alignItems: "center", justifyContent: "center",
-              flexShrink: 0,
-            }}>{p.initials}</span>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{
-                fontSize: 12, fontWeight: 600, color: c.fg1,
-                whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-              }}>{p.name}</div>
-              {i === 0 && selectable && (
-                <div style={{ fontSize: 10, color: c.fg3 }}>Contato principal</div>
-              )}
-            </div>
-            {selectable && (
-              <i className="ph ph-caret-right" style={{ fontSize: 12, color: c.fg3 }} />
-            )}
-          </div>
+          <PessoaRow
+            key={i}
+            person={p}
+            isFirst={i === 0}
+            selectable={selectable}
+            hasDualActions={hasDualActions}
+            onSelect={onSelect}
+            onSelectHistorico={onSelectHistorico}
+            onSelectDados={onSelectDados}
+          />
         ))}
       </div>
     </div>,
     document.body
+  );
+};
+
+const PessoaRow = ({ person, isFirst, selectable, hasDualActions, onSelect, onSelectHistorico, onSelectDados }) => {
+  const c = window.CCM.c;
+  const [hover, setHover] = React.useState(false);
+
+  const handleRowClick = () => {
+    if (hasDualActions) return; // hover-actions exclusivas
+    if (selectable) onSelect?.(person);
+  };
+
+  return (
+    <div
+      onClick={handleRowClick}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{
+        display: "flex", alignItems: "center", gap: 10,
+        padding: "8px 14px",
+        cursor: hasDualActions ? "default" : (selectable ? "pointer" : "default"),
+        background: hover && selectable ? c.borderSoft : "transparent",
+        transition: "background 120ms ease",
+      }}
+    >
+      <span style={{
+        width: 28, height: 28, borderRadius: "50%",
+        background: person.bg, color: person.fg, fontSize: 10, fontWeight: 700,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        flexShrink: 0,
+      }}>{person.initials}</span>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{
+          fontSize: 12, fontWeight: 600, color: c.fg1,
+          whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+        }}>{person.name}</div>
+        {isFirst && selectable && (
+          <div style={{ fontSize: 10, color: c.fg3 }}>Contato principal</div>
+        )}
+      </div>
+
+      {hasDualActions ? (
+        <div style={{
+          display: "flex", gap: 4,
+          opacity: hover ? 1 : 0,
+          transform: hover ? "translateX(0)" : "translateX(8px)",
+          transition: "opacity 160ms ease, transform 160ms ease",
+          pointerEvents: hover ? "auto" : "none",
+          flexShrink: 0,
+        }}>
+          <RowActionPill
+            icon="ph-clock-counter-clockwise"
+            label="Histórico"
+            tooltip="Histórico de mensagens"
+            onClick={(e) => { e.stopPropagation(); onSelectHistorico?.(person); }}
+          />
+          <RowActionPill
+            icon="ph-identification-card"
+            label="Dados"
+            tooltip="Dados do contato"
+            onClick={(e) => { e.stopPropagation(); onSelectDados?.(person); }}
+          />
+        </div>
+      ) : (
+        selectable && <i className="ph ph-caret-right" style={{ fontSize: 12, color: c.fg3 }} />
+      )}
+    </div>
+  );
+};
+
+const RowActionPill = ({ icon, label, tooltip, onClick }) => {
+  const c = window.CCM.c;
+  const [hover, setHover] = React.useState(false);
+  return (
+    <button
+      onClick={onClick}
+      title={tooltip}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{
+        display: "inline-flex", alignItems: "center", gap: 4,
+        height: 26, padding: "0 10px", borderRadius: 999, border: 0,
+        background: hover ? c.primary : "#fff",
+        color: hover ? "#fff" : c.primary,
+        border: `1px solid ${c.primaryLight}`,
+        fontSize: 11, fontWeight: 600, cursor: "pointer",
+        fontFamily: "Montserrat, sans-serif",
+        whiteSpace: "nowrap",
+        transition: "background 120ms ease, color 120ms ease",
+      }}
+    >
+      <i className={`ph ${icon}`} style={{ fontSize: 13 }} />
+      {label}
+    </button>
   );
 };
 

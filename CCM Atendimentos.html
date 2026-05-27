@@ -28,10 +28,11 @@
 <script src="src/demo-router.js"></script>
 <script type="text/babel" src="src/SettingsMenu.jsx?v=3"></script>
 <script type="text/babel" src="src/Header.jsx?v=3"></script>
-<script type="text/babel" src="src/QueueSidebar.jsx?v=21"></script>
+<script type="text/babel" src="src/QueueSidebar.jsx?v=22"></script>
 <script type="text/babel" src="src/AtendimentosList.jsx?v=25"></script>
-<script type="text/babel" src="src/ConversaPanel.jsx?v=11"></script>
-<script type="text/babel" src="src/AtendimentoDetail.jsx?v=14"></script>
+<script type="text/babel" src="src/ConversaPanel.jsx?v=12"></script>
+<script type="text/babel" src="src/AtendimentoDetail.jsx?v=15"></script>
+<script type="text/babel" src="src/ContatoHistoricoPeek.jsx?v=4"></script>
 <script type="text/babel" src="src/JornadasView.jsx?v=2"></script>
 <script type="text/babel" src="src/DashboardView.jsx?v=1"></script>
 
@@ -129,6 +130,9 @@ const App = () => {
   const [openAtendimento, setOpenAtendimento] = React.useState(
     demo.openAtendimentoId ? { id: demo.openAtendimentoId, mode: "fullscreen" } : null
   );
+  // Peek de contato (acionado pela pesquisa). expanded oculta a sidebar interna
+  // pra dar largura total à thread, igual ao toggle do AtendimentoDetail peek.
+  const [openContact, setOpenContact] = React.useState(null); // { id, expanded }
   const [activeNav, setActiveNav] = React.useState("Chat");
 
   // viewScope: "mine" | "all" | "favorites" — opções mutuamente exclusivas
@@ -170,9 +174,13 @@ const App = () => {
     setOpenAtendimento(null);
   };
 
-  const openPeek = (id) => setOpenAtendimento({ id, mode: "peek" });
+  const openPeek = (id) => { setOpenContact(null); setOpenAtendimento({ id, mode: "peek" }); };
   const expandFullscreen = () => setOpenAtendimento(prev => prev ? { ...prev, mode: "fullscreen" } : null);
   const closeAtendimento = () => setOpenAtendimento(null);
+
+  const openContactPeek = (id) => { setOpenAtendimento(null); setOpenContact({ id, expanded: false }); };
+  const closeContactPeek = () => setOpenContact(null);
+  const toggleContactExpand = () => setOpenContact(prev => prev ? { ...prev, expanded: !prev.expanded } : prev);
 
   const renderContent = () => {
     if (activeRail === "jornadas") {
@@ -205,6 +213,7 @@ const App = () => {
           chatTab={chatTab}
           onTabChange={handleTabChange}
           onOpenAtendimento={openPeek}
+          onOpenContact={openContactPeek}
           viewScope={viewScope}
           onScopeChange={setViewScope}
           favoritesCount={favoritedIds.size}
@@ -232,6 +241,14 @@ const App = () => {
               onExpand={expandFullscreen}
             />
           </PeekOverlay>
+        )}
+        {openContact && (
+          <ContatoHistoricoPeek
+            contactId={openContact.id}
+            expanded={openContact.expanded}
+            onClose={closeContactPeek}
+            onToggleExpand={toggleContactExpand}
+          />
         )}
       </React.Fragment>
     );

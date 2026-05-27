@@ -5,6 +5,7 @@ const QUEUE_SIDEBAR_DEFAULT = 340;
 
 const QueueSidebar = ({
   activeQueueId, onSelectQueue, chatTab = "atendimentos", onTabChange, onOpenAtendimento,
+  onOpenContact,
   viewScope = "all", onScopeChange,
   favoritesCount = 0, favoritedIds,
 }) => {
@@ -96,6 +97,10 @@ const QueueSidebar = ({
           onOpenAtendimento={(id) => {
             setSearchOpen(false);
             onOpenAtendimento && onOpenAtendimento(id);
+          }}
+          onOpenContact={(id) => {
+            setSearchOpen(false);
+            onOpenContact && onOpenContact(id);
           }}
         />
       )}
@@ -471,7 +476,7 @@ const SEARCH_FILTERS = [
   { id: "conversa",    label: "Conversa",         icon: "ph-chats-circle" },
 ];
 
-const SearchPopup = ({ buttonRef, onClose, onOpenAtendimento }) => {
+const SearchPopup = ({ buttonRef, onClose, onOpenAtendimento, onOpenContact }) => {
   const c = window.CCM.c;
   const [query, setQuery] = React.useState("");
   const [activeFilters, setActiveFilters] = React.useState([]);   // multi-select de filter ids
@@ -656,6 +661,7 @@ const SearchPopup = ({ buttonRef, onClose, onOpenAtendimento }) => {
             activeFilters={activeFilters}
             contatoFields={contatoFields}
             onOpenAtendimento={onOpenAtendimento}
+            onOpenContact={onOpenContact}
           />
         : <RecentSearchesContent onPick={(q) => setQuery(q)} />
       }
@@ -719,7 +725,7 @@ const highlightMatch = (text, term) => {
   );
 };
 
-const SearchResultsContent = ({ query, activeFilters = [], contatoFields = [], onOpenAtendimento }) => {
+const SearchResultsContent = ({ query, activeFilters = [], contatoFields = [], onOpenAtendimento, onOpenContact }) => {
   const c = window.CCM.c;
   const D = window.CCM_DATA;
   const q = query.trim();
@@ -746,6 +752,13 @@ const SearchResultsContent = ({ query, activeFilters = [], contatoFields = [], o
       checks.push(qDigits && digitsOnly(contact.cpf).includes(qDigits));
     return checks.some(Boolean);
   };
+
+  // Contatos únicos que casam com a query — só aparece quando "Dados do contato"
+  // está ativo (ou nenhum filtro). Renderizado em seção própria acima dos atendimentos.
+  const showContactSection = activeFilters.length === 0 || activeFilters.includes("contato");
+  const contactResults = showContactSection
+    ? Object.values(D.contacts || {}).filter(matchesContato)
+    : [];
 
   const matchedConvByAt = {};
   const results = (D.atendimentos || []).filter(at => {
@@ -783,6 +796,14 @@ const SearchResultsContent = ({ query, activeFilters = [], contatoFields = [], o
     return false;
   });
 
+  const noHits = results.length === 0 && contactResults.length === 0;
+
+  const summaryParts = [];
+  if (contactResults.length > 0)
+    summaryParts.push(`${contactResults.length} ${contactResults.length === 1 ? "contato" : "contatos"}`);
+  if (results.length > 0)
+    summaryParts.push(`${results.length} ${results.length === 1 ? "atendimento" : "atendimentos"}`);
+
   return (
     <React.Fragment>
       <div style={{
@@ -790,9 +811,7 @@ const SearchResultsContent = ({ query, activeFilters = [], contatoFields = [], o
         marginBottom: 10,
       }}>
         <div style={{ fontSize: 12, fontWeight: 600, color: c.fg2 }}>
-          {results.length === 0
-            ? "Nenhum atendimento encontrado"
-            : `${results.length} ${results.length === 1 ? "atendimento" : "atendimentos"}`}
+          {noHits ? "Nenhum resultado encontrado" : summaryParts.join(" · ")}
         </div>
         {activeFilters.length > 0 && (
           <div style={{ fontSize: 11, color: c.fg3 }}>
@@ -804,36 +823,173 @@ const SearchResultsContent = ({ query, activeFilters = [], contatoFields = [], o
         )}
       </div>
 
-      {results.length === 0 && (
+      {noHits && (
         <div style={{
           padding: "24px 12px", textAlign: "center", color: c.fg3,
           fontSize: 13, lineHeight: 1.5,
         }}>
-          Nenhum atendimento para <strong style={{ color: c.fg2 }}>"{q}"</strong>.
+          Nenhum resultado para <strong style={{ color: c.fg2 }}>"{q}"</strong>.
           <div style={{ fontSize: 11, color: c.fg3, marginTop: 6 }}>
             Tente outra busca ou ajuste os filtros acima.
           </div>
         </div>
       )}
 
-      {results.slice(0, 12).map(at => {
-        const contact = at.contatos[0];
-        const status = at.status || "Aberto";
-        const statusColor = STATUS_COLORS[status] || { bg: "#EEEFF3", fg: "#52555f" };
-        return (
-          <SearchResultRow
-            key={at.id}
-            atendimento={at}
-            contact={contact}
-            status={status}
-            statusColor={statusColor}
-            query={q}
-            matchedConvId={matchedConvByAt[at.id]}
-            onOpen={() => onOpenAtendimento && onOpenAtendimento(at.id)}
+      {/* ── Seção: Contatos ── */}
+      {contactResults.length > 0 && (
+        <React.Fragment>
+          <SectionLabel
+            icon="ph-address-book"
+            label="Contatos"
+            count={contactResults.length}
           />
-        );
-      })}
+          {contactResults.slice(0, 6).map(ct => (
+            <ContactResultRow
+              key={ct.id}
+              contact={ct}
+              query={q}
+              onOpen={() => onOpenContact && onOpenContact(ct.id)}
+            />
+          ))}
+        </React.Fragment>
+      )}
+
+      {/* ── Seção: Atendimentos ── */}
+      {results.length > 0 && (
+        <React.Fragment>
+          {contactResults.length > 0 && (
+            <SectionLabel
+              icon="ph-tag"
+              label="Atendimentos"
+              count={results.length}
+              style={{ marginTop: 14 }}
+            />
+          )}
+          {results.slice(0, 12).map(at => {
+            const contact = at.contatos[0];
+            const status = at.status || "Aberto";
+            const statusColor = STATUS_COLORS[status] || { bg: "#EEEFF3", fg: "#52555f" };
+            return (
+              <SearchResultRow
+                key={at.id}
+                atendimento={at}
+                contact={contact}
+                status={status}
+                statusColor={statusColor}
+                query={q}
+                matchedConvId={matchedConvByAt[at.id]}
+                onOpen={() => onOpenAtendimento && onOpenAtendimento(at.id)}
+              />
+            );
+          })}
+        </React.Fragment>
+      )}
     </React.Fragment>
+  );
+};
+
+const SectionLabel = ({ icon, label, count, style = {} }) => {
+  const c = window.CCM.c;
+  return (
+    <div style={{
+      display: "flex", alignItems: "center", gap: 6,
+      fontSize: 10, fontWeight: 700, color: c.fg3,
+      textTransform: "uppercase", letterSpacing: "0.06em",
+      marginBottom: 8, ...style,
+    }}>
+      <i className={`ph ${icon}`} style={{ fontSize: 12 }} />
+      <span>{label}</span>
+      <span style={{
+        background: c.borderSoft, color: c.fg2,
+        padding: "1px 7px", borderRadius: 999,
+        fontSize: 10, fontWeight: 700, letterSpacing: 0,
+      }}>{count}</span>
+    </div>
+  );
+};
+
+const ContactResultRow = ({ contact, query, onOpen }) => {
+  const c = window.CCM.c;
+  const [hover, setHover] = React.useState(false);
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onOpen}
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpen(); } }}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{
+        display: "flex", alignItems: "center", gap: 12,
+        background: hover ? c.primaryLightest : "#fff",
+        border: `1px solid ${hover ? c.primary : c.border}`,
+        borderRadius: 10, padding: "12px 14px",
+        marginBottom: 8, cursor: "pointer",
+        transition: "background 120ms ease, border-color 120ms ease",
+        outline: "none",
+      }}
+      title={`Abrir histórico de ${contact.name}`}
+    >
+      <span style={{
+        width: 36, height: 36, borderRadius: "50%",
+        background: contact.bg, color: contact.fg,
+        fontSize: 12, fontWeight: 700, flexShrink: 0,
+        display: "flex", alignItems: "center", justifyContent: "center",
+      }}>{contact.initials}</span>
+
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{
+          display: "flex", alignItems: "center", gap: 8,
+          fontSize: 14, fontWeight: 700, color: c.fg1, marginBottom: 4,
+        }}>
+          <span>{highlightMatch(contact.name, query)}</span>
+          <span style={{
+            display: "inline-flex", alignItems: "center", gap: 3,
+            background: c.primaryLightest, color: c.primary,
+            fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 999,
+          }}>
+            <i className="ph ph-address-book" style={{ fontSize: 11 }} />
+            Contato
+          </span>
+        </div>
+        <div style={{
+          display: "flex", flexWrap: "wrap", alignItems: "center",
+          gap: "4px 14px", fontSize: 11, color: c.fg2,
+        }}>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+            <i className="ph ph-phone" style={{ fontSize: 12 }} />
+            {highlightMatch(contact.phone, query)}
+          </span>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+            <i className="ph ph-identification-card" style={{ fontSize: 12 }} />
+            CPF {highlightMatch(contact.cpf, query)}
+          </span>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+            <i className="ph ph-envelope" style={{ fontSize: 12 }} />
+            {highlightMatch(contact.email, query)}
+          </span>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+            <i className="ph ph-hash" style={{ fontSize: 12 }} />
+            ID {highlightMatch(String(contact.id), query)}
+          </span>
+        </div>
+      </div>
+
+      <span
+        aria-label="Ver histórico do contato"
+        title="Ver histórico do contato"
+        style={{
+          width: 32, height: 32, borderRadius: 8,
+          display: "flex", alignItems: "center", justifyContent: "center",
+          color: hover ? c.primary : c.fg3,
+          background: hover ? "#fff" : "transparent",
+          flexShrink: 0,
+          transition: "background 120ms ease, color 120ms ease",
+        }}
+      >
+        <i className="ph ph-eye" style={{ fontSize: 18 }} />
+      </span>
+    </div>
   );
 };
 

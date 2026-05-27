@@ -722,4 +722,4 @@ const TransferModal = ({ onClose }) => {
   );
 };
 
-Object.assign(window, { ConversaPanel, TransferModal });
+Object.assign(window, { ConversaPanel, TransferModal, MessageBubble, DayChip });
