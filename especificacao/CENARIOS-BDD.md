@@ -32,14 +32,15 @@
 
 | Entidade | Descrição | Campos observados no protótipo |
 |---|---|---|
-| **Atendimento** (ticket) | Caso de atendimento; agrupa 1..N conversas e 1..N contatos/atendentes. | id, título, dataInício, status, slaTag, marcadores[], contatos[], atendentes[], conversas[], tipo/fila |
+| **Atendimento** (ticket) | Caso de atendimento; agrupa 1..N conversas e 1..N contatos/atendentes. | id, título, **dataInício**, **dataAtualização** (última atividade), status, slaTag, marcadores[], contatos[], atendentes[], conversas[], tipo/fila |
 | **Conversa** (talk) | Diálogo dentro de um atendimento, em um canal. | id, canal, status, contato, fila, preview, não-lidas (unread), mensagens[] |
 | **Mensagem** | Item de uma conversa. | id, papel (contato/atendente) **ou** tipo=sistema, texto, dataHora, canal, autor, reações[] |
 | **Contato** | Pessoa atendida. | id, nome, telefone, e-mail, CPF, iniciais |
 | **Atendente** | Operador. | id, nome, iniciais |
-| **Fila / Operação** | Estrutura hierárquica de até 2 níveis (Operação → Fila). Há a fila especial **"Sem fila específica"**. | id, nome, ícone, contador, filhos[] |
+| **Fila / Operação** | Estrutura hierárquica de até 2 níveis (Operação → Fila). Há o par especial **"Sem operação específica" → "Sem fila específica"** que recebe atendimentos órfãos. | id, nome, ícone, contador, filhos[] |
 | **Marcador** (tag) | Rótulo aplicável a atendimento/conversa. | label, cor |
 | **Jornada** | Conversa conduzida automaticamente por automação. | id, nome da jornada, contato, canal, mensagens[] |
+| **Notificação efêmera** (snackbar) | Feedback transitório de sucesso ou erro após uma ação. | mensagem, tipo (`success`/`error`), duração |
 
 ### Enumerações
 
@@ -94,10 +95,38 @@ Funcionalidade: Listar atendimentos por fila
       efetivamente atribuídos àquela fila
 
   @CEN-004
-  Cenário: Fila "Sem fila específica"
-    Dado que existem atendimentos sem fila definida
-    Quando o atendente seleciona "Sem fila específica"
+  Cenário: Fila "Sem fila específica" vive dentro de "Sem operação específica"
+    Dado que existem atendimentos sem fila/operação definida
+    Quando o sistema apresenta a árvore de filas
+    Então a operação "Sem operação específica" aparece no topo da árvore
+    E é apresentada já expandida por padrão
+    E contém uma única fila-filha chamada "Sem fila específica"
+    E o contador da operação é igual ao contador da fila órfã
+
+  @CEN-004A
+  Cenário: Filtrar pelos atendimentos da fila "Sem fila específica"
+    Quando o atendente seleciona a fila "Sem fila específica"
     Então o sistema retorna os atendimentos ainda não roteados a uma fila
+
+  @CEN-004B
+  Cenário: "Sem fila específica" não pode ser destino de transferência
+    Quando o atendente abre o seletor de filas para transferir um atendimento
+    Então a fila "Sem fila específica" não aparece como opção de destino
+    E nem a operação-pai "Sem operação específica"
+
+  @CEN-007
+  Cenário: Coluna "Data de atualização"
+    Dado um atendimento com atividade registrada (nova mensagem, troca de status, etc.)
+    Quando a lista de atendimentos é apresentada
+    Então cada linha exibe a data/hora da última atualização do atendimento
+    E é distinta da "Data de início" (que se refere à criação)
+
+  @CEN-008
+  Cenário: Paginação real da lista (rolagem em N páginas)
+    Dado que o número total de atendimentos é maior que o tamanho de página
+    Quando o atendente navega pelos botões de paginação
+    Então o sistema retorna o subconjunto correspondente
+    E exibe o intervalo de itens (X–Y de N) e o número da página atual
 
   @CEN-005
   Cenário: Paginação da lista
@@ -225,13 +254,28 @@ Funcionalidade: Ordenar e classificar por SLA
   @CEN-033
   Cenário: Inverter a ordem do SLA
     Dado que a visão por SLA está ordenada com mais atrasados primeiro
-    Quando o atendente inverte a ordem
+    Quando o atendente abre o modal de ordenação da coluna "SLA"
+    E seleciona a direção "Mais atrasados último"
     Então os menos atrasados passam a vir primeiro
 
   @CEN-034
   Cenário: SLA desabilitado nas configurações
     Dado que a configuração "Usa SLA?" está desligada
     Então o sistema não aplica prazos automáticos aos atendimentos
+
+  @CEN-035
+  Cenário: Ordenação por SLA acionada pelo cabeçalho da coluna
+    Dado que o atendente está na visão por SLA
+    Quando ele clica no cabeçalho da coluna "SLA"
+    Então o sistema abre o modal de ordenação com seções "Direção" e "Escopo"
+    E a direção padrão é "Mais atrasados primeiro"
+    E o escopo padrão é "todos os atendimentos"
+
+  @CEN-036
+  Cenário: Modo SLA sem ordenação explícita assume default por SLA
+    Dado que o atendente entra no escopo "SLA" sem ter ordenado nenhuma coluna
+    Então o sistema ordena automaticamente por SLA, escopo "todos", direção "asc"
+    E o cabeçalho da coluna "SLA" aparece destacado como ativo
 ```
 
 ---
@@ -297,6 +341,19 @@ Funcionalidade: Marcadores de atendimento e conversa
     Então os atendimentos são agrupados/ordenados pelo rótulo do primeiro marcador
     E atendimentos sem marcador vão para o fim
     E a ordenação pode ser aplicada apenas à página atual ou a todos os itens
+
+  @CEN-054
+  Cenário: Direção de ordenação por marcador
+    Dado que o atendente abriu o modal de ordenação da coluna "Marcadores"
+    Quando ele seleciona a direção "Z → A (alfabético)"
+    Então a ordenação passa a ser decrescente pelo rótulo do primeiro marcador
+
+  @CEN-055
+  Cenário: Reordenar marcadores em "apenas página"
+    Dado que a coluna "Marcadores" está ordenada com escopo "página"
+    Quando a página atual contém os N primeiros itens
+    Então só esses N itens são reordenados por marcador
+    E as páginas subsequentes mantêm a ordem original
 ```
 
 ---
@@ -366,6 +423,80 @@ Funcionalidade: Buscar atendimentos e contatos
     Dado que o atendente realizou buscas anteriormente
     Quando ele abre a busca sem digitar nada
     Então o sistema sugere as pesquisas recentes
+
+  @CEN-068
+  Cenário: Skeleton durante a busca inicial
+    Dado que o atendente digitou um termo de busca
+    Quando o sistema ainda não recebeu os primeiros resultados do servidor
+    Então é apresentado um indicador de carregamento (skeleton/placeholder)
+    E o cabeçalho do resultado exibe "Buscando '<termo>'…" com um spinner
+
+  @CEN-069
+  Cenário: Primeira leva de resultados — "Últimos 30 dias"
+    Dado que a busca foi disparada
+    Quando o servidor retorna os atendimentos do período recente (últimos 30 dias)
+    Então a lista de atendimentos é exibida com a indicação "últimos 30 dias"
+    E o resumo informa "X de N atendimentos (últimos 30 dias)"
+    E o sistema continua carregando o histórico completo em segundo plano
+
+  @CEN-069A
+  Cenário: Carregando o histórico completo (loading inline)
+    Dado que apenas os itens dos últimos 30 dias foram exibidos
+    Quando o sistema busca o histórico completo
+    Então é exibido um indicador inline "Buscando no histórico completo (X de N)…"
+    E o usuário pode continuar interagindo com os resultados já exibidos
+
+  @CEN-069B
+  Cenário: Histórico completo retorna e habilita a paginação
+    Dado que o histórico completo foi recebido
+    Quando o total de resultados excede o tamanho da página
+    Então a paginação numérica passa a ser apresentada (← 1 2 … N →)
+    E o resumo passa a "N atendimentos" sem a etiqueta "últimos 30 dias"
+
+  @CEN-069C
+  Cenário: Recente vem com 0 itens — pula direto para o histórico completo
+    Dado que a busca não tem itens nos últimos 30 dias
+    Quando o histórico completo é carregado
+    Então o indicador "buscando histórico completo" não é apresentado
+    E os resultados aparecem direto na paginação completa
+
+  @CEN-068D
+  Cenário: Mudar o termo ou os filtros reinicia o ciclo
+    Dado que a busca está exibindo a página completa
+    Quando o atendente altera o termo de busca ou um chip de atributo
+    Então o sistema reinicia o ciclo: skeleton → recentes → completo
+    E a página atual volta para 1
+    E qualquer filtro de contato ativo é limpo
+
+  @CEN-068E
+  Cenário: Paginação numérica dos resultados
+    Dado que a busca devolveu mais de uma página de resultados
+    Quando o atendente clica em um número de página, em ← ou em →
+    Então o sistema apresenta os itens correspondentes àquela página
+    E o controle de páginas mostra uma janela compacta (até 5 botões + reticências)
+    E o botão ← fica desabilitado na primeira página
+    E o botão → fica desabilitado na última página
+
+  @CEN-068F
+  Cenário: Filtrar resultados pelos atendimentos de um contato (funil)
+    Dado que a busca retornou um ou mais contatos
+    Quando o atendente clica no ícone de funil sobre um contato
+    Então o sistema passa a exibir apenas os atendimentos vinculados àquele contact.id
+    E é apresentado um banner "Filtrando atendimentos de <Nome>" com botão de limpar
+    E a paginação é recalculada para o subconjunto filtrado
+
+  @CEN-068G
+  Cenário: Alternar o filtro de contato (toggle)
+    Dado que um contato já está sendo usado como filtro de atendimentos
+    Quando o atendente clica novamente no funil do mesmo contato
+    Então o filtro é removido e a lista volta a mostrar todos os atendimentos da busca
+
+  @CEN-068H
+  Cenário: Tamanho da janela de paginação para grandes volumes
+    Dado que a busca retornou ≈3000 resultados
+    Quando o atendente está na página 1
+    Então a paginação exibe os botões 1, 2, 3, 4, 5 … 300
+    E os botões intermediários adaptam-se conforme a página atual avança
 ```
 
 ---
@@ -406,6 +537,21 @@ Funcionalidade: Filtros avançados de atendimentos
   Cenário: Combinar filtros
     Quando o atendente aplica filtros de status, atendente e SLA simultaneamente
     Então o sistema retorna a interseção dos critérios
+
+  @CEN-076
+  Cenário: Filtrar por marcador (multi-seleção)
+    Dado que existem marcadores cadastrados aplicados aos atendimentos
+    Quando o atendente abre o filtro "Marcadores" e seleciona um ou mais marcadores
+    Então o sistema retorna apenas os atendimentos que possuem pelo menos um
+      dos marcadores selecionados
+
+  @CEN-077
+  Cenário: Lista de marcadores do filtro vem dos dados existentes
+    Dado que o sistema conhece a lista de marcadores aplicados a algum atendimento
+    Quando o atendente abre o dropdown do filtro "Marcadores"
+    Então a lista de opções é apresentada em ordem alfabética (pt-BR)
+    E cada opção mostra um indicador visual da cor do marcador
+    E há um campo de pesquisa para encontrar um marcador pelo nome
 ```
 
 ---
@@ -783,6 +929,14 @@ Funcionalidade: Configurar regras do chat
   Cenário: Marcadores de destaque
     Dado que há marcadores definidos como "de destaque"
     Então esses marcadores recebem prioridade de exibição por conversa
+
+  @CEN-178
+  Cenário: Fechar conversas automaticamente por inatividade
+    Dado que "Fechar conversas automaticamente" está habilitado com um período
+      (valor numérico + unidade ∈ {Minutos, Horas, Dias, Semanas, Meses})
+    Quando uma conversa fica sem interação além do período
+    Então o sistema encerra apenas aquela conversa específica
+    E o atendimento que a contém não é encerrado (diferente do CEN-173 que afeta o atendimento)
 ```
 
 ---
@@ -863,9 +1017,19 @@ Funcionalidade: Navegação principal
   Quero alternar entre as áreas do produto
 
   @CEN-200
-  Cenário: Alternar entre Atendimentos, Jornadas e Relatórios
+  Cenário: Alternar entre Atendimentos e Jornadas
     Quando o atendente seleciona uma área na navegação
     Então o sistema apresenta o conteúdo correspondente
+
+  @CEN-200A
+  Cenário: Ícone "Relatórios" como presença visual no rail
+    Dado que o ícone de "Relatórios" segue presente no rail lateral
+    Quando o atendente clica nesse ícone
+    Então o sistema NÃO navega para a tela de Relatórios
+    E mantém o atendente na área atual (sem efeito de rota)
+    # Observação para o time: este comportamento é provisório enquanto a área
+    # de Relatórios não estiver pronta para ser exposta. Quando estiver,
+    # restaurar o roteamento normal.
 
   @CEN-201
   Cenário: Abertura rápida de atendimento (pré-visualização)
@@ -876,12 +1040,348 @@ Funcionalidade: Navegação principal
 
 ---
 
+# 22. Vincular conversa a outro atendimento
+
+```gherkin
+Funcionalidade: Vincular uma conversa a um atendimento diferente
+  Como atendente, ao perceber que uma conversa deveria pertencer a outro
+  atendimento (ou virar um atendimento próprio), quero realocá-la sem
+  perder o histórico.
+
+  Contexto:
+    Dado uma conversa "C" pertencente ao atendimento "A1"
+    E que existem outros atendimentos no sistema
+
+  @CEN-210
+  Cenário: Acionar a operação a partir do painel da conversa
+    Quando o atendente aciona a opção "Vincular conversa a outro atendimento"
+      no cabeçalho do painel da conversa
+    Então o sistema apresenta um modal com duas opções:
+      "Criar um novo atendimento" e "Vincular a um atendimento existente"
+
+  @CEN-211
+  Cenário: Criar um novo atendimento para essa conversa
+    Quando o atendente escolhe "Criar um novo atendimento"
+    Então o sistema cria um atendimento novo na fila atual
+    E move a conversa "C" para esse atendimento novo
+    E remove a conversa do atendimento "A1" de origem
+    E apresenta uma notificação de sucesso confirmando o id do novo atendimento
+
+  @CEN-212
+  Cenário: Vincular a um atendimento existente (busca multi-atributo)
+    Quando o atendente escolhe "Vincular a um atendimento existente"
+    Então o sistema apresenta uma busca com chips multi-atributo:
+      Atendimento, Operação, Atendente, Dados do contato
+    E permite filtrar por qualquer combinação desses atributos
+    E retorna até N atendimentos compatíveis com o termo
+
+  @CEN-213
+  Cenário: O próprio atendimento de origem é excluído dos resultados
+    Quando a busca por atendimentos é executada
+    Então o atendimento "A1" (origem da conversa) não aparece como opção
+
+  @CEN-214
+  Cenário: Confirmar o vínculo a um atendimento existente
+    Dado que a busca retornou o atendimento "A2"
+    Quando o atendente confirma a ação "Vincular" em "A2"
+    Então a conversa "C" passa a pertencer ao atendimento "A2"
+    E é removida do atendimento "A1"
+    E uma notificação de sucesso confirma "Conversa <id> vinculada ao atendimento #A2"
+
+  @CEN-215
+  Cenário: Pré-visualizar um atendimento dos resultados (somente leitura)
+    Dado que a busca retornou atendimentos candidatos
+    Quando o atendente aciona o ícone de "visualizar" sobre um resultado
+    Então o sistema abre o atendimento em modo somente-leitura
+    E o modal de busca permanece aberto por baixo
+    E nenhuma ação que altere estado é oferecida no preview
+      (ver "Preview read-only" em §24)
+
+  @CEN-216
+  Cenário: Falha na operação dispara notificação de erro
+    Quando uma falha impede a conclusão de "vincular" ou "criar novo"
+    Então o sistema apresenta uma notificação de erro descritiva
+    E a conversa "C" continua no atendimento "A1" original
+```
+
+---
+
+# 23. Trazer conversa de outro atendimento (operação inversa)
+
+```gherkin
+Funcionalidade: Trazer uma conversa para o atendimento atual
+  Como atendente que está em um atendimento "A2", quero importar para cá
+  uma conversa que hoje está em outro atendimento.
+
+  Contexto:
+    Dado que o atendente está no atendimento "A2"
+    E existem conversas em outros atendimentos
+
+  @CEN-220
+  Cenário: Acionar a operação a partir do cabeçalho do atendimento
+    Quando o atendente aciona "Trazer conversa de outro atendimento"
+      no cabeçalho do atendimento "A2"
+    Então o sistema apresenta um modal de busca de conversas
+
+  @CEN-221
+  Cenário: Busca multi-atributo de conversas
+    Quando o atendente busca por um termo
+    Então o sistema aceita filtros multi-seleção:
+      Conversa (id), Atendimento (id de origem), Dados do contato, Atendente
+    E retorna conversas pertencentes a outros atendimentos
+    E exclui conversas que já pertencem ao atendimento "A2"
+
+  @CEN-222
+  Cenário: Confirmar a importação da conversa
+    Dado que o atendente encontrou a conversa "C" do atendimento "A1"
+    Quando ele confirma "Trazer" em "C"
+    Então "C" passa a pertencer a "A2"
+    E é removida de "A1"
+    E uma notificação de sucesso confirma
+      "Conversa <id> trazida do atendimento #A1 para #A2"
+
+  @CEN-223
+  Cenário: Pré-visualizar a conversa antes de trazer (somente leitura)
+    Quando o atendente aciona "visualizar" sobre um resultado de conversa
+    Então o sistema abre o atendimento de origem em modo somente-leitura
+    E o foco inicial é na conversa específica que ele estava prestes a trazer
+      (initialConvId)
+
+  @CEN-224
+  Cenário: Falha na importação
+    Quando uma falha impede a importação
+    Então o sistema apresenta uma notificação de erro
+    E a conversa permanece no atendimento original
+```
+
+---
+
+# 24. Pré-visualização somente-leitura de atendimento
+
+```gherkin
+Funcionalidade: Visualizar um atendimento sem alterar nada
+  Como atendente, quero examinar conteúdo de outro atendimento (a partir
+  dos modais de vincular/trazer ou da lista) sem risco de disparar
+  ações em cadeia (anti-loop).
+
+  @CEN-230
+  Cenário: Conteúdo do preview
+    Quando o atendente abre o preview de um atendimento
+    Então o sistema exibe:
+      • identificação do atendimento (id, tipo) com indicação "Somente leitura"
+      • lista lateral das conversas do atendimento
+      • thread da conversa atualmente selecionada, em ordem cronológica
+
+  @CEN-231
+  Cenário: Foco inicial em uma conversa específica (initialConvId)
+    Dado que o preview foi aberto com um `initialConvId` informado
+    Então a conversa correspondente é a inicialmente selecionada
+    Caso contrário, a primeira conversa da lista é selecionada por padrão
+
+  @CEN-232
+  Cenário: Ações de alteração de estado são suprimidas
+    Quando o preview está aberto
+    Então NÃO são oferecidos:
+      • envio de mensagens (composer)
+      • vincular/trazer conversa
+      • alterar fila/atendente
+      • aplicar/remover marcadores
+      • finalizar conversa
+      • criar nova conversa
+      • alterar status do atendimento
+    # Critério principal anti-loop: o preview não pode ter entradas
+    # para abrir outros previews ou modais que aceitem alteração.
+
+  @CEN-233
+  Cenário: Fechar o preview
+    Quando o atendente clica no botão de fechar do preview
+      ou pressiona Esc
+      ou clica fora da área do preview
+    Então o preview é fechado
+    E o modal de origem (vincular/trazer) permanece no estado em que estava
+
+  @CEN-234
+  Cenário: Trocar a conversa selecionada dentro do preview
+    Dado que o atendimento tem mais de uma conversa
+    Quando o atendente seleciona outra conversa na lista lateral
+    Então a thread principal passa a exibir as mensagens da conversa escolhida
+
+  @CEN-235
+  Cenário: Atendimento sem conversas
+    Quando o preview é aberto para um atendimento sem conversas
+    Então o sistema apresenta um estado vazio explicando a ausência de conversas
+```
+
+---
+
+# 25. Notificações de feedback (snackbar)
+
+```gherkin
+Funcionalidade: Apresentar feedback após ações de domínio
+  Como atendente, quero entender se uma ação concluiu com sucesso ou falhou.
+
+  @CEN-240
+  Cenário: Notificação de sucesso
+    Quando uma ação concluiu com sucesso (ex.: vincular conversa, trazer
+      conversa, criar novo atendimento, transferir, etc.)
+    Então o sistema apresenta uma notificação efêmera de tipo "success"
+    E inclui uma mensagem descritiva da ação realizada
+
+  @CEN-241
+  Cenário: Notificação de erro
+    Quando uma ação falhou
+    Então o sistema apresenta uma notificação efêmera de tipo "error"
+    E inclui uma mensagem orientando o atendente
+
+  @CEN-242
+  Cenário: Auto-fechamento
+    Dado uma notificação visível
+    Quando o tempo configurado (≈ alguns segundos) expira
+    Então a notificação é fechada automaticamente
+
+  @CEN-243
+  Cenário: Fechamento manual antes do tempo
+    Dado uma notificação visível
+    Quando o atendente clica no botão de fechar da notificação
+    Então a notificação é encerrada imediatamente
+
+  @CEN-244
+  Cenário: Substituição de notificação
+    Dado uma notificação em exibição
+    Quando uma nova ação dispara outra notificação
+    Então a notificação anterior é substituída pela nova
+    # [regra a definir: empilhar ou substituir]
+```
+
+---
+
+# 26. Ordenação de colunas — modelo unificado
+
+```gherkin
+Funcionalidade: Ordenar a lista por uma coluna com direção e escopo
+  Como atendente, quero priorizar a lista por diferentes critérios usando
+  um único padrão de interação (Modal "Direção + Escopo") para qualquer
+  coluna ordenável.
+
+  Contexto:
+    Dado que as colunas ordenáveis da lista são:
+      Marcadores, Data de início, Data de atualização, SLA
+    E que apenas UMA coluna pode estar ordenada por vez
+
+  @CEN-250
+  Esquema do Cenário: Direções suportadas por coluna
+    Dado a coluna "<coluna>"
+    Então as duas opções de direção são "<direcao_default>" (padrão) e "<direcao_alt>"
+
+    Exemplos:
+      | coluna             | direcao_default                | direcao_alt                  |
+      | Marcadores         | A → Z (alfabético)              | Z → A                         |
+      | Data de início     | Mais recentes primeiro          | Mais antigos primeiro         |
+      | Data de atualização| Atualizações mais recentes      | Atualizações mais antigas     |
+      | SLA                | Mais atrasados primeiro         | Mais atrasados último         |
+
+  @CEN-251
+  Cenário: Escopo da ordenação
+    Quando o atendente abre o modal de ordenação de uma coluna
+    Então as duas opções de escopo são:
+      "Ordenar apenas a página atual" (mantém ordem das outras páginas)
+      "Ordenar todos os atendimentos" (reordena a lista inteira)
+
+  @CEN-252
+  Cenário: Substituir o sort ativo ao escolher outra coluna
+    Dado que a coluna "Marcadores" está ordenada
+    Quando o atendente confirma uma ordenação em "Data de início"
+    Então o sort de "Marcadores" é desativado
+    E o badge de "página"/"todos" passa a aparecer apenas em "Data de início"
+
+  @CEN-253
+  Cenário: Limpar ordenação
+    Dado uma coluna ordenada
+    Quando o atendente abre o modal e seleciona "Limpar ordenação"
+    Então a coluna deixa de estar ordenada
+    E a lista retorna à ordem natural
+
+  @CEN-254
+  Cenário: Indicador visual no cabeçalho
+    Dado que uma coluna está ordenada com direção "asc"
+    Então o cabeçalho exibe um ícone de seta para cima
+    E uma badge indicando "página" ou "todos" conforme o escopo
+    Quando a direção é "desc"
+    Então o ícone passa a ser seta para baixo
+
+  @CEN-255
+  Cenário: Cálculo da "Data de atualização"
+    Dado um atendimento
+    Quando o sistema apresenta sua data de atualização
+    Então ela reflete o timestamp da última atividade do atendimento
+      (última mensagem, mudança de status, edição, etc.)
+    # [regra a definir: incluir/excluir mudanças automáticas como auto-fechamento]
+```
+
+---
+
+# 27. Visão Gantt
+
+```gherkin
+Funcionalidade: Visualizar atendimentos em uma linha do tempo (Gantt)
+  Como gestor/atendente, quero ver a distribuição temporal dos atendimentos.
+
+  @CEN-260
+  Cenário: Apresentar atendimentos como barras na linha do tempo
+    Quando o atendente seleciona a visão "Gantt"
+    Então o sistema apresenta uma linha do tempo onde cada atendimento é
+      uma barra entre sua data de início e sua última atividade (ou agora,
+      se ainda estiver em andamento)
+
+  @CEN-261
+  Cenário: Marcação de "agora"
+    Dado a linha do tempo
+    Então uma marcação visual indica o momento atual (hoje/agora)
+
+  @CEN-262
+  Cenário: Paginação da visão Gantt
+    Dado que o total de atendimentos excede o tamanho da página
+    Quando o atendente está na visão Gantt
+    Então um rodapé de paginação é apresentado com o mesmo padrão da Lista
+      (X/N itens · ← N → · seletor de tamanho · página X de Y)
+
+  @CEN-263
+  Cenário: Abrir um atendimento clicando na barra
+    Quando o atendente clica em uma barra
+    Então o detalhe do atendimento correspondente é aberto
+```
+
+---
+
 ## Observações finais para o Back-end
 
 - **Roteamento atendimento → fila:** no protótipo a associação é simulada; no sistema
   real deve existir vínculo persistente entre atendimento e fila (e operação).
-- **Cálculo de TMA/TME, "próximo ao prazo", auto-fechamento e alerta de tempo de
-  espera** dependem de regras temporais **[a definir]** com base em data/hora de servidor.
+- **Cálculo de TMA/TME, "próximo ao prazo", auto-fechamento de atendimento (§18 CEN-173)
+  e auto-fechamento de conversa (§18 CEN-178)** dependem de regras temporais
+  **[a definir]** com base em data/hora de servidor.
+- **`Data de atualização` do atendimento** (CEN-007, CEN-255) corresponde a um campo
+  novo que precisa ser mantido pelo back-end a cada evento relevante do atendimento.
+- **Vincular / trazer conversa (§22 e §23):** ambas operações são variações do mesmo
+  "mover conversa de A1 para A2" (PATCH em `conversa.atendimento_id`). O back-end
+  precisa apenas validar que A1 ≠ A2 e que a conversa pertence ao usuário/escopo.
+- **Pré-visualização somente-leitura (§24):** o conteúdo é o mesmo do detalhe normal
+  do atendimento; o que muda é a apresentação. O back-end pode reaproveitar o
+  endpoint de detalhe — a regra anti-loop é responsabilidade do front-end.
+- **Notificações efêmeras (§25):** são UI; o back-end deve apenas devolver respostas
+  claras (sucesso/erro) com mensagem opcional para a notificação.
+- **Pesquisa em duas fases (§7 CEN-068..069):** o back-end pode oferecer
+  `?period=last30` como atalho para a primeira leva e depois `?period=all` (ou
+  ausência do parâmetro) para o histórico completo, mantendo a mesma query.
+- **Paginação de busca (§7 CEN-068E..H):** suportar `page`/`size` e devolver o total
+  para a UI calcular a janela de botões.
+- **Filtro de Marcadores (§8 CEN-076):** a lista de marcadores disponíveis para o
+  filtro deve ser derivada dos marcadores efetivamente em uso (ou de um catálogo
+  persistido, conforme decisão de produto).
+- **Sort unificado (§26):** o back-end deve suportar quatro chaves de ordenação
+  (marcador, dataInicio, dataAtualizacao, sla) com direção `asc`/`desc`. O escopo
+  "página" pode ser implementado client-side; "todos" exige reordenação do dataset
+  inteiro no servidor (ou via cursor que respeite a ordem).
 - **Tempo real:** novas mensagens, contadores de não lidas e contadores de fila
   pressupõem atualização em tempo real **[mecanismo a definir]**.
 - **Permissões/escopo** (Meus/Todos e visualização de conversas de terceiros)
