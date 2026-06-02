@@ -24,19 +24,44 @@
 <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
 
 <script src="src/tokens.js?v=3"></script>
-<script src="src/data.js?v=3"></script>
+<script src="src/data.js?v=4"></script>
 <script src="src/demo-router.js"></script>
-<script type="text/babel" src="src/SettingsMenu.jsx?v=3"></script>
+<script type="text/babel" src="src/Tooltip.jsx?v=2"></script>
+<script type="text/babel" src="src/SettingsMenu.jsx?v=5"></script>
 <script type="text/babel" src="src/Header.jsx?v=3"></script>
-<script type="text/babel" src="src/QueueSidebar.jsx?v=22"></script>
-<script type="text/babel" src="src/AtendimentosList.jsx?v=25"></script>
-<script type="text/babel" src="src/ConversaPanel.jsx?v=12"></script>
-<script type="text/babel" src="src/AtendimentoDetail.jsx?v=15"></script>
-<script type="text/babel" src="src/ContatoHistoricoPeek.jsx?v=5"></script>
-<script type="text/babel" src="src/JornadasView.jsx?v=2"></script>
-<script type="text/babel" src="src/DashboardView.jsx?v=1"></script>
+<script type="text/babel" src="src/QueueSidebar.jsx?v=28"></script>
+<script type="text/babel" src="src/AtendimentosList.jsx?v=28"></script>
+<script type="text/babel" src="src/ConversaPanel.jsx?v=15"></script>
+<script type="text/babel" src="src/AtendimentoDetail.jsx?v=20"></script>
+<script type="text/babel" src="src/ContatoHistoricoPeek.jsx?v=6"></script>
+<script type="text/babel" src="src/JornadasView.jsx?v=3"></script>
+<!-- DashboardView removido: ícone "Relatórios" segue visível no rail, mas a rota não está acessível -->
+<!-- <script type="text/babel" src="src/DashboardView.jsx?v=1"></script> -->
 
 <script type="text/babel">
+// =====================================================================
+// DE-PARA REACT → ANGULAR  ·  App shell (este <script> inline)
+// ---------------------------------------------------------------------
+// Casca do app: rail de ícones à esquerda + Header no topo + roteamento
+// entre as 3 áreas. No Angular isto é o AppComponent + layout do @core
+// (HeaderComponent <app-header>) e o roteamento do módulo.
+//
+//   App (root)        → AppComponent + RouterOutlet. A área "Chat" monta o
+//                       módulo @modules/chat-one-to-one (ChatOneToOneComponent
+//                       <app-chat-one-to-one>, rotas /conversas e /atendimentos).
+//   Rail/RailIcon     → navegação lateral por ícones. No ngx-ccm a navegação
+//                       principal é o HeaderComponent (@core); um rail dedicado
+//                       seria um componente de layout do @core. Itens:
+//                         "Atendimentos" → /atendimentos (chat-one-to-one)
+//                         "Jornadas"     → @modules/automation (<app-automation>)
+//                         "Relatórios"   → ChatDashboardComponent <app-chat-dashboard>
+//   PeekOverlay       → drawer/overlay lateral (Angular CDK overlay ou mat-drawer;
+//                       tema em @theme/css/material-drawer.scss). Usado p/ abrir
+//                       AtendimentoDetail (peek) e ContatoHistoricoPeek.
+//   renderContent()   → troca de rota (RouterOutlet): chat / jornadas / relatórios.
+// Tokens/tema: window.CCM.c (src/tokens.js) + design-system/colors_and_type.css
+//   espelham @theme/style-guide do Angular. Guia completo: de-para/README.md
+// =====================================================================
 const RAIL_ITEMS = [
   { id: "chat",       icon: "ph-notepad",  title: "Atendimentos" },
   { id: "jornadas",  icon: "ph-robot",    title: "Jornadas" },
@@ -186,9 +211,8 @@ const App = () => {
     if (activeRail === "jornadas") {
       return <JornadasView />;
     }
-    if (activeRail === "relatorios") {
-      return <DashboardView />;
-    }
+    // "relatorios" foi removido como rota acessível. O ícone segue no rail
+    // só por presença visual — o onSelect ignora cliques nele.
     const switchQueueAndClose = (id) => { setActiveQueue(id); setOpenAtendimento(null); };
     const switchAtendimento = (id) => setOpenAtendimento(prev => prev ? { ...prev, id } : { id, mode: "fullscreen" });
 
@@ -258,7 +282,14 @@ const App = () => {
     <React.Fragment>
       <Header active={activeNav} onNav={setActiveNav} />
       <div style={{ flex: 1, display: "flex", overflow: "hidden", minHeight: 0, position: "relative" }}>
-        <Rail active={activeRail} onSelect={setActiveRail} />
+        <Rail
+          active={activeRail}
+          onSelect={(id) => {
+            // "relatorios" é só presença visual no rail — não navega pra lugar nenhum.
+            if (id === "relatorios") return;
+            setActiveRail(id);
+          }}
+        />
         {renderContent()}
       </div>
     </React.Fragment>

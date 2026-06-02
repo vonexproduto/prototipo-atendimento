@@ -1,7 +1,12 @@
 // data.js — mocked CCM atendimento data
 window.CCM_DATA = (() => {
   const queues = [
-    { id: "sem-fila", icon: "✖", name: "Sem fila específica", count: 40 },
+    {
+      id: "sem-operacao", icon: "✖", name: "Sem operação específica", count: 40, expanded: true,
+      children: [
+        { id: "sem-fila", icon: "✖", name: "Sem fila específica", count: 40 },
+      ],
+    },
     {
       id: "operacao-suporte", icon: "😎", name: "Operação de Suporte", count: 23, expanded: true,
       children: [

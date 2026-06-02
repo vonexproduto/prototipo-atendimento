@@ -1,4 +1,22 @@
 // SettingsMenu.jsx — Dropdown da engrenagem + Modal de Configurações do Chat
+// =====================================================================
+// DE-PARA REACT → ANGULAR  ·  SettingsMenu.jsx
+// ---------------------------------------------------------------------
+//   SettingsMenu      → família header-menu do @core:
+//                       HeaderMenuGroupComponent  <app-header-menu-group>
+//                       HeaderMenuCardComponent   <app-header-menu-card>
+//                       @core/components/header-menu-*/
+//   ChatSettingsModal → ChatSettingsModalComponent  <app-chat-settings-modal>
+//                       @modules/chat-one-to-one/modals/chat-settings-modal/
+//                       (modal MatDialog; tabs Geral/Conversas/E-mail)
+//   Helpers de form (mapear para os átomos compartilhados do @shared):
+//     Toggle      → mat-slide-toggle (Material; tema em @theme/css/material-toggle.scss)
+//     SelectInput → CcmSelectListComponent   <ccm-select-list>   @shared/components/ccm-select-list/
+//                   (ou CcmMultiSelectComponent <ccm-multi-select> se multi)
+//     NumberInput → mat-form-field + input (tema material-form-field.scss)
+//     SettingRow  → linha de formulário (sem átomo dedicado; replicar layout)
+//   Botões "Cancelar/Salvar" → ButtonComponent <ccm-button> (type secondary/primary)
+// Doc: de-para/02-componentes.md
 // ───────────────────────────────────────────────────────────────────────
 // Ordem dos componentes (importante para o JSX):
 //   1. Helpers de form (Toggle, NumberInput, SelectInput, Field, ...)
@@ -194,11 +212,13 @@ const SettingRow = ({ title, description, info, toggle, children }) => {
           }}>
             {title}
             {info && (
-              <i
-                className="ph ph-info"
-                title={info}
-                style={{ fontSize: 14, color: c.warning || "#f59e0b", cursor: "help" }}
-              />
+              <CCMTooltip label={info}>
+                <i
+                  className="ph ph-info"
+                  aria-label={info}
+                  style={{ fontSize: 14, color: c.warning || "#f59e0b", cursor: "help" }}
+                />
+              </CCMTooltip>
             )}
           </div>
           {description && (
@@ -273,6 +293,10 @@ const ChatSettingsModal = ({ onClose, onSave }) => {
   const [trocaProduto, setTrocaProduto]                = React.useState("nova-conversa");
   const [trocaAtendentes, setTrocaAtendentes]          = React.useState("nova-conversa");
   const [visualizacao, setVisualizacao]                = React.useState("nao-pode");
+  // Fechar conversas automaticamente após N tempo sem interação
+  // (independente de "Fechar atendimentos" do tab Geral — granularidade
+  // diferente: aqui é por CONVERSA, lá é por ATENDIMENTO)
+  const [autoFecharConversas, setAutoFecharConversas]  = React.useState({ on: false, valor: 7, unidade: "dia" });
   const [ccEmail, setCcEmail]                          = React.useState(true);
 
   React.useEffect(() => {
@@ -284,7 +308,8 @@ const ChatSettingsModal = ({ onClose, onSave }) => {
   const handleSave = () => {
     onSave?.({
       tempoEspera, atendimento, usaSLA, atribuirResponsavel, marcadores,
-      autoFechar, trocaProduto, trocaAtendentes, visualizacao, ccEmail,
+      autoFechar, trocaProduto, trocaAtendentes, visualizacao,
+      autoFecharConversas, ccEmail,
     });
     onClose();
   };
@@ -488,6 +513,31 @@ const ChatSettingsModal = ({ onClose, onSave }) => {
                   options={VISUALIZACAO_OPCOES}
                   onChange={setVisualizacao}
                 />
+              </SettingRow>
+
+              {/* NOVO: Fechar conversas automaticamente após N tempo sem interação */}
+              <SettingRow
+                title="Fechar conversas automaticamente"
+                description="Conversas sem interação dentro do período definido serão encerradas automaticamente."
+                info="Não afeta o atendimento — apenas a conversa específica é finalizada."
+                toggle={<Toggle checked={autoFecharConversas.on} onChange={(on) => setAutoFecharConversas(p => ({ ...p, on }))} />}
+              >
+                {autoFecharConversas.on && (
+                  <div style={{ display: "flex", gap: 10 }}>
+                    <NumberInput
+                      label="Após"
+                      value={autoFecharConversas.valor}
+                      onChange={(v) => setAutoFecharConversas(p => ({ ...p, valor: v }))}
+                      style={{ flex: "0 0 120px" }}
+                    />
+                    <SelectInput
+                      value={autoFecharConversas.unidade}
+                      options={TIME_UNITS}
+                      onChange={(v) => setAutoFecharConversas(p => ({ ...p, unidade: v }))}
+                      style={{ flex: "0 0 160px" }}
+                    />
+                  </div>
+                )}
               </SettingRow>
             </div>
           )}

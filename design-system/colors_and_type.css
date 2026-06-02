@@ -1,7 +1,15 @@
 /* =============================================================
    Vonex CCM Design System — colors_and_type.css
-   Source of truth: src/app/@theme/style-guide/css-files/colors.scss,
+   Source of truth (Angular): src/app/@theme/style-guide/css-files/colors.scss,
                     typography.scss, tokens-and-grids.scss
+   ─────────────────────────────────────────────────────────────
+   DE-PARA REACT → ANGULAR:
+   As CSS custom properties abaixo (--brand-color-*, --neutral-color-*,
+   --feedback-color-*, etc.) usam EXATAMENTE os mesmos nomes do Angular —
+   este arquivo é o espelho 1:1 do :root do ngx-ccm. Ao recriar no Angular,
+   estas variáveis já existem (não precisam ser criadas), e as classes
+   utilitárias (.color-*, .bg-*) também. Veja a tabela completa em
+   de-para/01-design-tokens.md e o mapa JS em src/tokens.js.
    ============================================================= */
 
 @font-face {

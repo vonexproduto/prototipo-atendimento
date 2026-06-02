@@ -1,10 +1,50 @@
 // ConversaPanel.jsx — right side of detail: the open conversation thread
+// =====================================================================
+// DE-PARA REACT → ANGULAR  ·  ConversaPanel.jsx
+// ---------------------------------------------------------------------
+// Painel direito: thread da conversa + composer multicanal + ações.
+// Módulos Angular: @modules/chat-one-to-one (orquestração) + @modules/chat (motor).
+//
+//   ConversaPanel       → ChatComponent              <app-chat>
+//                         @modules/chat-one-to-one/components/chat/
+//                         (wrapper de layout = ChatOneToOneContainerComponent
+//                          <app-chat-one-to-one-container>)
+//   (sub-header da conv) → ChatOneToOneHeaderComponent <app-chat-one-to-one-header>
+//                         @modules/chat/components/chat-headers/chat-one-to-one-header/
+//   (área da thread)     → ChatCoreComponent          <app-chat-core>
+//                         @modules/chat/components/chat-core/
+//   MessageBubble       → ChatMessageComponent       <app-chat-message> que delega a
+//                         MessageTypeRouterComponent <app-message-type-router> →
+//                         TextMessage/Image/Audio/Document/Video/Html/WhatsApp-message
+//                         (@modules/chat/components/chat-message/*). Rodapé = <app-message-footer>
+//   Composer            → ChatInputRouterComponent   <app-chat-input-router>
+//                         @modules/chat/components/chat-input-router/
+//     Abas de canal → um componente por canal:
+//       WhatsApp     → <app-chat-input-whatsapp>
+//       WhatsApp Web → <app-chat-input-whatsapp-web>
+//       SMS          → <app-chat-input-sms>
+//       E-mail       → <app-chat-input-email>
+//       RCS          → <app-chat-input-rcs>
+//       Torpedo (voz)→ <app-chat-input-voicemail>      (Torpedo de voz = voicemail)
+//       Nota interna → <app-chat-input-note>
+//   MarcadoresChipStrip /→ ChatAttendanceMarkersSelectionComponent
+//   (popover marcadores)   <app-chat-attendance-markers-selection> +
+//                          ChatMarkersModalComponent <app-chat-markers-modal>
+//                          (@modules/chat/...). Chips visuais = .ccm-chips
+//   TransferModal /      → UserAssignmentModalComponent <app-user-assignment-modal>
+//   QueuePopover           e TicketAssignmentModalComponent <app-ticket-assignment-modal>
+//   FinalizarConversaModal → fluxo "encerrar conversa" (MatDialog de confirmação)
+//   ContactInfoPopover   → metadados do contato (chat-metadata-popover em popover.scss)
+//   DayChip/ToolbarBtn   → helpers visuais (sem 1:1; chip de data + botão-ícone)
+// Doc: de-para/02-componentes.md
+// =====================================================================
 const ConversaPanel = ({
   conv, contact, attendant, atendimentoId, onTransfer,
   expanded, onToggleExpand, tab,
   onOpenContact, onChangeQueue,
   appliedMarkers = [], onOpenMarcadores,
   convStatus, onFinalizeConversa,
+  onShowSnack, // (message, type:"success"|"error") => void — vem de AtendimentoDetail
 }) => {
   const c = window.CCM.c;
   const D = window.CCM_DATA;
@@ -12,6 +52,9 @@ const ConversaPanel = ({
   const [text, setText] = React.useState("");
   const [channel, setChannel] = React.useState(conv.channel === "email" ? "E-mail" : "WhatsApp");
   const [confirmFinalize, setConfirmFinalize] = React.useState(false);
+  // Modal "Vincular conversa a outro atendimento" (substitui o antigo entry-point
+  // de marcadores no ícone-tag — marcadores seguem acessíveis via chip strip).
+  const [linkModalOpen, setLinkModalOpen] = React.useState(false);
   const effectiveStatus = convStatus || conv.status;
   const isFinalized = effectiveStatus === "Finalizada" || effectiveStatus === "Finalizado";
 
@@ -87,9 +130,9 @@ const ConversaPanel = ({
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
           <ToolbarBtn
-            icon="ph-tag"
-            onClick={(e) => openMarcadores(e.currentTarget)}
-            title="Marcadores"
+            icon="ph-link-simple"
+            onClick={() => setLinkModalOpen(true)}
+            title="Vincular conversa a outro atendimento"
           />
           <ToolbarBtn
             icon="ph-user"
@@ -101,19 +144,21 @@ const ConversaPanel = ({
             onClick={() => onChangeQueue?.()}
             title="Alterar fila / atendente"
           />
-          <button
-            title={isFinalized ? "Conversa finalizada" : "Finalizar conversa"}
-            disabled={isFinalized}
-            onClick={() => !isFinalized && setConfirmFinalize(true)}
-            style={{
-              width: 32, height: 32, borderRadius: 8, border: 0,
-              background: isFinalized ? c.borderSoft : c.successPure,
-              color: isFinalized ? c.fg3 : "#fff",
-              cursor: isFinalized ? "not-allowed" : "pointer",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              marginLeft: 4,
-              opacity: isFinalized ? 0.7 : 1,
-            }}><i className="ph-fill ph-check" style={{ fontSize: 16 }} /></button>
+          <CCMTooltip label={isFinalized ? "Conversa finalizada" : "Finalizar conversa"}>
+            <button
+              aria-label={isFinalized ? "Conversa finalizada" : "Finalizar conversa"}
+              disabled={isFinalized}
+              onClick={() => !isFinalized && setConfirmFinalize(true)}
+              style={{
+                width: 32, height: 32, borderRadius: 8, border: 0,
+                background: isFinalized ? c.borderSoft : c.successPure,
+                color: isFinalized ? c.fg3 : "#fff",
+                cursor: isFinalized ? "not-allowed" : "pointer",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                marginLeft: 4,
+                opacity: isFinalized ? 0.7 : 1,
+              }}><i className="ph-fill ph-check" style={{ fontSize: 16 }} /></button>
+          </CCMTooltip>
           <ToolbarBtn icon={expanded ? "ph-arrows-in" : "ph-arrows-out"} onClick={onToggleExpand} title="Expandir" />
         </div>
       </div>
@@ -158,6 +203,26 @@ const ConversaPanel = ({
           onConfirm={() => {
             onFinalizeConversa?.(conv.id);
             setConfirmFinalize(false);
+          }}
+        />
+      )}
+
+      {linkModalOpen && (
+        <LinkConversaModal
+          convId={conv.id}
+          currentAtendimentoId={atendimentoId}
+          onClose={() => setLinkModalOpen(false)}
+          onLinked={(targetId) => {
+            setLinkModalOpen(false);
+            onShowSnack?.(`Conversa ${conv.id} vinculada ao atendimento #${targetId}`, "success");
+          }}
+          onCreated={(newId) => {
+            setLinkModalOpen(false);
+            onShowSnack?.(`Conversa ${conv.id} movida para o novo atendimento #${newId}`, "success");
+          }}
+          onError={(message) => {
+            setLinkModalOpen(false);
+            onShowSnack?.(message || "Não foi possível vincular a conversa. Tente novamente.", "error");
           }}
         />
       )}
@@ -256,22 +321,24 @@ const MarcadoresChipStrip = ({ applied, onOpen }) => {
   if (!applied || applied.length === 0) {
     // Estado vazio — pílula sutil "+ Marcador" que abre o popover
     return (
-      <button
-        onClick={(e) => onOpen(e.currentTarget)}
-        title="Adicionar marcador"
-        style={{
-          marginLeft: 4, border: `1px dashed ${c.border}`,
-          background: "transparent", color: c.fg3,
-          fontSize: 11, fontWeight: 500, padding: "3px 10px",
-          borderRadius: 999, cursor: "pointer",
-          fontFamily: "Montserrat, sans-serif",
-          transition: "background 120ms ease, color 120ms ease, border-color 120ms ease",
-        }}
-        onMouseEnter={e => { e.currentTarget.style.background = c.primaryLightest; e.currentTarget.style.color = c.primary; e.currentTarget.style.borderColor = c.primaryLight; }}
-        onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = c.fg3; e.currentTarget.style.borderColor = c.border; }}
-      >
-        + Marcador
-      </button>
+      <CCMTooltip label="Adicionar marcador">
+        <button
+          onClick={(e) => onOpen(e.currentTarget)}
+          aria-label="Adicionar marcador"
+          style={{
+            marginLeft: 4, border: `1px dashed ${c.border}`,
+            background: "transparent", color: c.fg3,
+            fontSize: 11, fontWeight: 500, padding: "3px 10px",
+            borderRadius: 999, cursor: "pointer",
+            fontFamily: "Montserrat, sans-serif",
+            transition: "background 120ms ease, color 120ms ease, border-color 120ms ease",
+          }}
+          onMouseEnter={e => { e.currentTarget.style.background = c.primaryLightest; e.currentTarget.style.color = c.primary; e.currentTarget.style.borderColor = c.primaryLight; }}
+          onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = c.fg3; e.currentTarget.style.borderColor = c.border; }}
+        >
+          + Marcador
+        </button>
+      </CCMTooltip>
     );
   }
 
@@ -290,20 +357,21 @@ const MarcadoresChipStrip = ({ applied, onOpen }) => {
   return (
     <div style={{ display: "inline-flex", alignItems: "center", gap: 4, marginLeft: 6 }}>
       {visible.map(m => (
-        <button
-          key={m.label}
-          onClick={(e) => onOpen(e.currentTarget)}
-          style={{
-            background: m.color + "14", color: m.color, border: 0,
-            fontSize: 10, fontWeight: 600, padding: "3px 10px", borderRadius: 999,
-            cursor: "pointer", fontFamily: "Montserrat, sans-serif",
-            transition: "filter 120ms ease",
-            maxWidth: 110, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-          }}
-          onMouseEnter={e => e.currentTarget.style.filter = "brightness(0.95)"}
-          onMouseLeave={e => e.currentTarget.style.filter = "none"}
-          title={m.label}
-        >{m.label}</button>
+        <CCMTooltip key={m.label} label={m.label}>
+          <button
+            onClick={(e) => onOpen(e.currentTarget)}
+            aria-label={m.label}
+            style={{
+              background: m.color + "14", color: m.color, border: 0,
+              fontSize: 10, fontWeight: 600, padding: "3px 10px", borderRadius: 999,
+              cursor: "pointer", fontFamily: "Montserrat, sans-serif",
+              transition: "filter 120ms ease",
+              maxWidth: 110, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+            }}
+            onMouseEnter={e => e.currentTarget.style.filter = "brightness(0.95)"}
+            onMouseLeave={e => e.currentTarget.style.filter = "none"}
+          >{m.label}</button>
+        </CCMTooltip>
       ))}
       {hidden.length > 0 && (
         <button
@@ -354,14 +422,19 @@ const ToolbarBtn = ({ icon, onClick, title }) => {
   const c = window.CCM.c;
   const [hover, setHover] = React.useState(false);
   return (
-    <button onClick={onClick} title={title}
-      onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
-      style={{
-        width: 32, height: 32, borderRadius: 8, border: 0,
-        background: hover ? c.borderSoft : "transparent",
-        color: c.fg2, cursor: "pointer",
-        display: "flex", alignItems: "center", justifyContent: "center",
-      }}><i className={`ph ${icon}`} style={{ fontSize: 16 }} /></button>
+    <CCMTooltip label={title}>
+      <button
+        type="button"
+        onClick={onClick}
+        aria-label={title}
+        onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
+        style={{
+          width: 32, height: 32, borderRadius: 8, border: 0,
+          background: hover ? c.borderSoft : "transparent",
+          color: c.fg2, cursor: "pointer",
+          display: "flex", alignItems: "center", justifyContent: "center",
+        }}><i className={`ph ${icon}`} style={{ fontSize: 16 }} /></button>
+    </CCMTooltip>
   );
 };
 
@@ -722,4 +795,368 @@ const TransferModal = ({ onClose }) => {
   );
 };
 
-Object.assign(window, { ConversaPanel, TransferModal, MessageBubble, DayChip });
+// ─────────────────────────────────────────────────────────────────────────
+// LinkConversaModal — "Vincular conversa a outro atendimento"
+// ---------------------------------------------------------------------
+// 2 modos:
+//   1. choose: usuário escolhe entre criar novo atendimento OU vincular a um
+//      atendimento existente.
+//   2. search: busca multi-atributo (Atendimento ID, Operação, Atendente,
+//      Dados do contato) — mesmo padrão da busca da QueueSidebar.
+//
+// DE-PARA Angular: TicketLinkModalComponent <app-ticket-link-modal>
+//   POST /atendimentos { source_conv_id: convId }     (criar novo)
+//   PATCH /conversas/:convId { atendimento_id: tgtId } (vincular existente)
+// ─────────────────────────────────────────────────────────────────────────
+const LINK_SEARCH_FILTERS = [
+  { id: "atendimento", label: "Atendimento",      icon: "ph-tag" },
+  { id: "operacao",    label: "Operação",         icon: "ph-buildings" },
+  { id: "atendente",   label: "Atendente",        icon: "ph-user" },
+  { id: "contato",     label: "Dados do contato", icon: "ph-address-book" },
+];
+
+const LinkConversaModal = ({ convId, currentAtendimentoId, onClose, onLinked, onCreated, onError }) => {
+  const c = window.CCM.c;
+  const D = window.CCM_DATA;
+  const [step, setStep] = React.useState("choose"); // "choose" | "search"
+  const [query, setQuery] = React.useState("");
+  const [filters, setFilters] = React.useState([]);
+  // Preview read-only de um atendimento dos resultados — não causa loop
+  // infinito porque o preview NÃO tem botões de ação (sem vincular,
+  // sem nova conversa, sem composer).
+  const [previewId, setPreviewId] = React.useState(null);
+
+  React.useEffect(() => {
+    const onKey = (e) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  const norm = (s) => (s || "").toLowerCase();
+  const digits = (s) => (s || "").replace(/\D+/g, "");
+  const q = query.trim();
+  const qn = norm(q);
+  const qd = digits(q);
+  const has = (f) => filters.length === 0 || filters.includes(f);
+
+  const results = React.useMemo(() => {
+    if (!q) return [];
+    return (D.atendimentos || []).filter(at => {
+      if (at.id === currentAtendimentoId) return false; // não mostra o próprio
+      const contact = at.contatos?.[0];
+      if (!contact) return false;
+      if (has("atendimento") && qd && at.id.includes(qd)) return true;
+      if (has("operacao")) {
+        const fila = at.conversas?.[0]?.fila || at.tipo || "";
+        if (qn && norm(fila).includes(qn)) return true;
+      }
+      if (has("atendente")) {
+        if ((at.atendentes || []).some(a => qn && norm(a.name).includes(qn))) return true;
+      }
+      if (has("contato")) {
+        if (qn && norm(contact.name).includes(qn)) return true;
+        if (qn && norm(contact.email).includes(qn)) return true;
+        if (qd && digits(contact.phone).includes(qd)) return true;
+        if (qd && digits(contact.cpf).includes(qd)) return true;
+      }
+      return false;
+    }).slice(0, 30);
+  }, [q, qn, qd, filters, D.atendimentos, currentAtendimentoId]);
+
+  const handleCreateNew = () => {
+    // Simula a criação. Hash determinístico do convId pra dar a ilusão de novo ID.
+    const hash = String(convId).split("").reduce((s, ch) => (s * 31 + ch.charCodeAt(0)) | 0, 0);
+    const newId = String(100600 + (Math.abs(hash) % 400));
+    onCreated?.(newId);
+  };
+
+  const toggleFilter = (fid) => {
+    setFilters(prev => prev.includes(fid) ? prev.filter(x => x !== fid) : [...prev, fid]);
+  };
+
+  return ReactDOM.createPortal(
+    <div onClick={onClose} style={{
+      position: "fixed", inset: 0, background: "rgba(40,41,61,0.5)",
+      display: "flex", alignItems: "flex-start", justifyContent: "center",
+      padding: "60px 16px", overflowY: "auto", zIndex: 9999,
+      fontFamily: "Montserrat, sans-serif",
+    }}>
+      <div onClick={e => e.stopPropagation()} style={{
+        background: "#fff", borderRadius: 16, width: "100%", maxWidth: 560,
+        boxShadow: "0 20px 50px rgba(40,41,61,0.30)",
+        display: "flex", flexDirection: "column", maxHeight: "calc(100vh - 120px)",
+        overflow: "hidden",
+      }}>
+        {/* Header */}
+        <div style={{
+          display: "flex", alignItems: "center", gap: 10,
+          padding: "16px 20px", borderBottom: `1px solid ${c.border}`,
+        }}>
+          {step === "search" && (
+            <CCMTooltip label="Voltar">
+              <button onClick={() => setStep("choose")} aria-label="Voltar" style={{
+                width: 28, height: 28, border: 0, background: "transparent",
+                cursor: "pointer", color: c.fg2, borderRadius: 6,
+                display: "flex", alignItems: "center", justifyContent: "center",
+              }}><i className="ph ph-arrow-left" style={{ fontSize: 16 }} /></button>
+            </CCMTooltip>
+          )}
+          <i className="ph ph-link-simple" style={{ fontSize: 18, color: c.primary }} />
+          <span style={{ fontSize: 14, fontWeight: 700, color: c.fg1, flex: 1 }}>
+            Vincular conversa <span style={{ color: c.primary }}>{convId}</span>
+          </span>
+          <CCMTooltip label="Fechar">
+            <button onClick={onClose} aria-label="Fechar" style={{
+              width: 28, height: 28, border: 0, background: "transparent",
+              cursor: "pointer", color: c.fg2, borderRadius: 6,
+              display: "flex", alignItems: "center", justifyContent: "center",
+            }}><i className="ph ph-x" style={{ fontSize: 14 }} /></button>
+          </CCMTooltip>
+        </div>
+
+        {/* Body */}
+        <div style={{ padding: 20, flex: 1, overflowY: "auto", minHeight: 0 }}>
+          {step === "choose" && (
+            <React.Fragment>
+              <p style={{ margin: "0 0 16px", fontSize: 13, color: c.fg2, lineHeight: 1.5 }}>
+                Esta conversa pode virar um <strong>atendimento novo</strong> ou ser anexada
+                a um <strong>atendimento existente</strong>.
+              </p>
+
+              {/* Option 1: criar novo */}
+              <button
+                type="button"
+                onClick={handleCreateNew}
+                style={{
+                  width: "100%", textAlign: "left", padding: "14px 16px",
+                  border: `1.5px solid ${c.border}`, borderRadius: 12,
+                  background: "#fff", cursor: "pointer", marginBottom: 10,
+                  display: "flex", alignItems: "flex-start", gap: 12,
+                  fontFamily: "Montserrat, sans-serif",
+                  transition: "background 150ms ease, border-color 150ms ease",
+                }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = c.primary; e.currentTarget.style.background = c.primaryLightest; }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = c.border; e.currentTarget.style.background = "#fff"; }}
+              >
+                <div style={{
+                  width: 36, height: 36, borderRadius: 8, flexShrink: 0,
+                  background: c.primaryLightest, color: c.primary,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                }}><i className="ph ph-plus-circle" style={{ fontSize: 20 }} /></div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: c.fg1, marginBottom: 4 }}>
+                    Criar um novo atendimento
+                  </div>
+                  <div style={{ fontSize: 12, color: c.fg2, lineHeight: 1.5 }}>
+                    A conversa <strong>{convId}</strong> é movida para um novo atendimento na fila atual.
+                  </div>
+                </div>
+              </button>
+
+              {/* Option 2: vincular existente */}
+              <button
+                type="button"
+                onClick={() => setStep("search")}
+                style={{
+                  width: "100%", textAlign: "left", padding: "14px 16px",
+                  border: `1.5px solid ${c.border}`, borderRadius: 12,
+                  background: "#fff", cursor: "pointer",
+                  display: "flex", alignItems: "flex-start", gap: 12,
+                  fontFamily: "Montserrat, sans-serif",
+                  transition: "background 150ms ease, border-color 150ms ease",
+                }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = c.primary; e.currentTarget.style.background = c.primaryLightest; }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = c.border; e.currentTarget.style.background = "#fff"; }}
+              >
+                <div style={{
+                  width: 36, height: 36, borderRadius: 8, flexShrink: 0,
+                  background: c.primaryLightest, color: c.primary,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                }}><i className="ph ph-magnifying-glass" style={{ fontSize: 20 }} /></div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: c.fg1, marginBottom: 4 }}>
+                    Vincular a um atendimento existente
+                  </div>
+                  <div style={{ fontSize: 12, color: c.fg2, lineHeight: 1.5 }}>
+                    Busque por <strong>ID</strong>, <strong>operação</strong>, <strong>atendente</strong> ou <strong>dados do contato</strong>.
+                  </div>
+                </div>
+                <i className="ph ph-caret-right" style={{ fontSize: 14, color: c.fg3, marginTop: 12 }} />
+              </button>
+            </React.Fragment>
+          )}
+
+          {step === "search" && (
+            <React.Fragment>
+              {/* Search input */}
+              <div style={{
+                display: "flex", alignItems: "center", gap: 10,
+                border: `1.5px solid ${filters.length > 0 ? c.primary : c.border}`,
+                borderRadius: 12, padding: "11px 14px", marginBottom: 14,
+                transition: "border-color 150ms ease",
+              }}>
+                <i className="ph ph-magnifying-glass" style={{ fontSize: 16, color: c.fg3 }} />
+                <input
+                  autoFocus
+                  value={query}
+                  onChange={e => setQuery(e.target.value)}
+                  placeholder="Buscar atendimento por ID, contato, atendente…"
+                  style={{
+                    flex: 1, border: 0, outline: "none",
+                    fontFamily: "Montserrat, sans-serif",
+                    fontSize: 13, color: c.fg1, background: "transparent",
+                  }}
+                />
+                {query && (
+                  <i className="ph ph-x"
+                    onClick={() => setQuery("")}
+                    style={{ fontSize: 14, color: c.fg3, cursor: "pointer" }} />
+                )}
+              </div>
+
+              {/* Filter chips */}
+              <div style={{ fontSize: 11, color: c.fg2, marginBottom: 6 }}>
+                Buscar em (deixe vazio pra buscar em todos os campos):
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 14 }}>
+                {LINK_SEARCH_FILTERS.map(f => {
+                  const active = filters.includes(f.id);
+                  return (
+                    <button
+                      key={f.id}
+                      type="button"
+                      onClick={() => toggleFilter(f.id)}
+                      style={{
+                        display: "inline-flex", alignItems: "center", gap: 6,
+                        height: 28, padding: "0 12px", borderRadius: 999,
+                        border: `1px solid ${active ? c.primary : c.border}`,
+                        background: active ? c.primaryLightest : "#fff",
+                        color: active ? c.primary : c.fg2,
+                        fontSize: 12, fontWeight: 600, cursor: "pointer",
+                        fontFamily: "Montserrat, sans-serif",
+                      }}
+                    >
+                      <i className={`ph ${f.icon}`} style={{ fontSize: 13 }} />
+                      {f.label}
+                      {active && <i className="ph ph-check" style={{ fontSize: 11, marginLeft: 2 }} />}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Results */}
+              {!q && (
+                <div style={{
+                  padding: "20px 12px", textAlign: "center",
+                  color: c.fg3, fontSize: 12, lineHeight: 1.5,
+                }}>
+                  Digite acima pra começar a buscar atendimentos.
+                </div>
+              )}
+              {q && results.length === 0 && (
+                <div style={{
+                  padding: "20px 12px", textAlign: "center",
+                  color: c.fg3, fontSize: 12, lineHeight: 1.5,
+                }}>
+                  Nenhum atendimento encontrado para <strong style={{ color: c.fg2 }}>"{q}"</strong>.
+                </div>
+              )}
+              {q && results.length > 0 && (
+                <React.Fragment>
+                  <div style={{ fontSize: 11, color: c.fg2, marginBottom: 8, fontWeight: 600 }}>
+                    {results.length} {results.length === 1 ? "resultado" : "resultados"}
+                  </div>
+                  {results.map(at => {
+                    const ct = at.contatos[0];
+                    const status = at.status || "Aberto";
+                    return (
+                      <div key={at.id} style={{
+                        display: "flex", alignItems: "center", gap: 12,
+                        padding: "10px 12px", borderRadius: 10,
+                        background: "#fff", border: `1px solid ${c.border}`,
+                        marginBottom: 6,
+                      }}>
+                        <span style={{
+                          width: 32, height: 32, borderRadius: "50%", flexShrink: 0,
+                          background: ct.bg, color: ct.fg,
+                          fontSize: 11, fontWeight: 700,
+                          display: "flex", alignItems: "center", justifyContent: "center",
+                        }}>{ct.initials}</span>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: c.fg1, display: "flex", gap: 8, alignItems: "center" }}>
+                            Atendimento {at.id}
+                            <span style={{
+                              background: c.borderSoft, color: c.fg2,
+                              fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 999,
+                            }}>{status}</span>
+                          </div>
+                          <div style={{ fontSize: 11, color: c.fg2, marginTop: 2 }}>
+                            {ct.name} · {ct.email}
+                          </div>
+                        </div>
+                        <CCMTooltip label="Visualizar atendimento (somente leitura)">
+                          <button
+                            type="button"
+                            onClick={() => setPreviewId(at.id)}
+                            aria-label="Visualizar atendimento"
+                            style={{
+                              width: 30, height: 30, border: `1px solid ${c.border}`,
+                              background: "#fff", color: c.fg2, borderRadius: 8,
+                              cursor: "pointer", flexShrink: 0,
+                              display: "inline-flex", alignItems: "center", justifyContent: "center",
+                              fontFamily: "Montserrat, sans-serif",
+                              transition: "background 120ms ease, color 120ms ease, border-color 120ms ease",
+                            }}
+                            onMouseEnter={e => { e.currentTarget.style.background = c.primaryLightest; e.currentTarget.style.color = c.primary; e.currentTarget.style.borderColor = c.primary; }}
+                            onMouseLeave={e => { e.currentTarget.style.background = "#fff"; e.currentTarget.style.color = c.fg2; e.currentTarget.style.borderColor = c.border; }}
+                          >
+                            <i className="ph ph-eye" style={{ fontSize: 14 }} />
+                          </button>
+                        </CCMTooltip>
+                        <button
+                          type="button"
+                          onClick={() => onLinked?.(at.id)}
+                          style={{
+                            border: 0, background: c.primary, color: "#fff",
+                            padding: "0 12px", height: 30, borderRadius: 8,
+                            fontFamily: "Montserrat, sans-serif",
+                            fontSize: 12, fontWeight: 600, cursor: "pointer",
+                            display: "inline-flex", alignItems: "center", gap: 4,
+                          }}
+                        >
+                          Vincular <i className="ph ph-arrow-right" style={{ fontSize: 12 }} />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </React.Fragment>
+              )}
+            </React.Fragment>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div style={{
+          padding: "12px 20px", borderTop: `1px solid ${c.border}`,
+          display: "flex", justifyContent: "flex-end", gap: 8,
+        }}>
+          <button onClick={onClose} style={{
+            padding: "0 18px", height: 36, borderRadius: 10, border: `1px solid ${c.border}`,
+            background: "#fff", color: c.fg1, fontWeight: 600, cursor: "pointer",
+            fontFamily: "Montserrat, sans-serif", fontSize: 13,
+          }}>Cancelar</button>
+        </div>
+      </div>
+
+      {previewId && window.AtendimentoPreview && (
+        <window.AtendimentoPreview
+          atendimentoId={previewId}
+          onClose={() => setPreviewId(null)}
+        />
+      )}
+    </div>,
+    document.body
+  );
+};
+
+Object.assign(window, { ConversaPanel, TransferModal, MessageBubble, DayChip, LinkConversaModal });

@@ -1,4 +1,40 @@
 // AtendimentosList.jsx — main table of atendimentos for the selected queue
+// =====================================================================
+// DE-PARA REACT → ANGULAR  ·  AtendimentosList.jsx
+// ---------------------------------------------------------------------
+// Tabela central de atendimentos (tickets) da fila selecionada + ações.
+// Módulo Angular: @modules/chat-one-to-one  (rota /atendimentos).
+//
+//   AtendimentosList     → TicketsDashTableComponent  <app-tickets-dash-table>
+//                          @modules/chat-one-to-one/components/tickets-dash-table/
+//                          (container/lista = TicketsDashListComponent
+//                           <app-tickets-dash-list>; dashboard pai =
+//                           ChatTicketsDashboardComponent <app-chat-tickets-dashboard>)
+//   AvatarStack          → AvatarListComponent  <ccm-avatar-list
+//                            [nameList]="..." [size]="36" [limit]="3">
+//                          @shared/components/avatar-list/  (avatar único = <ccm-avatar>)
+//   StatusDropdown /      → ChatTicketStatusComponent <app-chat-ticket-status> +
+//   status pill            TicketStatusChangeComponent <app-ticket-status-change>
+//   SLA tag (slaColor)   → ChatSlaIndicatorComponent <app-chat-sla-indicator>
+//   IconLabelButton /    → ButtonComponent <ccm-button> (variantes mini/icon)
+//   "Novo atendimento"
+//   RowActionsMenu       → mat-menu (tema @theme/css/material-menu.scss / popover.scss)
+//   marcadores (chips)   → .ccm-chips (@theme/css/chips.scss) — cor por marcador
+//   Status/SLA badges    → .ccm-badget (@theme/css/badget.scss)
+//   NovaConversaModal    → TicketCreationModalComponent <app-ticket-creation-modal>
+//                          + ChatCreateTalkComponent <app-chat-create-talk>
+//   AtendimentoFormModal → TicketCreationModalComponent (modo criar/editar)
+//   ColumnSortModal      → ordenação por coluna (marcador/dataInicio/dataAtualizacao)
+//                          (talks-list-sort-filter / mat-menu — parametrizado por column)
+//   FiltersPanel         → ChatDashAdvancedFiltersModalComponent
+//                          <app-chat-dash-advanced-filters-modal>
+//   IaTransferConfirmModal → modal de confirmação (MatDialog genérico)
+//   LoadingSkeleton      → CcmLoaderComponent <ccm-loader>
+//   KanbanView/GanttView → views alternativas (sem 1:1 hoje; libs CDK/gantt)
+// Tabela: o Angular tem ccm-table (Handsontable) p/ grids editáveis, mas esta
+//   listagem usa <table>/mat-table estilizada (ver @theme/css/table.scss).
+// Doc: de-para/02-componentes.md
+// =====================================================================
 
 // HoverLabel — text that animates in/out next to an icon
 const HoverLabel = ({ show, children, gap = 7 }) => (
@@ -22,24 +58,26 @@ const IconLabelButton = ({ icon, label, hovered, onHoverChange, active, onClick,
     ? c.primary
     : (active ? c.primaryLightest : (hovered ? c.borderSoft : "transparent"));
   return (
-    <button
-      onClick={onClick}
-      onMouseEnter={() => onHoverChange?.(true)}
-      onMouseLeave={() => onHoverChange?.(false)}
-      title={label}
-      style={{
-        height: 40, padding: "0 12px", border: 0, borderRadius: isPrimary ? 12 : 10,
-        background: baseBg, color: baseColor,
-        cursor: "pointer", display: "flex", alignItems: "center",
-        fontFamily: "Montserrat, sans-serif",
-        fontSize: 13, fontWeight: isPrimary ? 600 : 600,
-        boxShadow: isPrimary ? "0 2px 6px rgba(146,64,255,0.30)" : "none",
-        transition: "background 180ms ease, color 180ms ease",
-      }}
-    >
-      <i className={`ph ${icon}`} style={{ fontSize: 16 }} />
-      <HoverLabel show={hovered || active}>{label}</HoverLabel>
-    </button>
+    <CCMTooltip label={label}>
+      <button
+        onClick={onClick}
+        onMouseEnter={() => onHoverChange?.(true)}
+        onMouseLeave={() => onHoverChange?.(false)}
+        aria-label={label}
+        style={{
+          height: 40, padding: "0 12px", border: 0, borderRadius: isPrimary ? 12 : 10,
+          background: baseBg, color: baseColor,
+          cursor: "pointer", display: "flex", alignItems: "center",
+          fontFamily: "Montserrat, sans-serif",
+          fontSize: 13, fontWeight: isPrimary ? 600 : 600,
+          boxShadow: isPrimary ? "0 2px 6px rgba(146,64,255,0.30)" : "none",
+          transition: "background 180ms ease, color 180ms ease",
+        }}
+      >
+        <i className={`ph ${icon}`} style={{ fontSize: 16 }} />
+        <HoverLabel show={hovered || active}>{label}</HoverLabel>
+      </button>
+    </CCMTooltip>
   );
 };
 
@@ -51,17 +89,26 @@ const AtendimentosList = ({
   // Favoritos e SLA são opções mutuamente exclusivas do segmented control.
   const favoritesOnly = viewScope === "favorites";
   const isSlaMode = viewScope === "sla";
-  // Direção do sort no modo SLA: "asc" = mais atrasados primeiro (default)
-  // "desc" = mais atrasados último. Toggle pelo chip do header.
-  const [slaSortDir, setSlaSortDir] = React.useState("asc");
   const c = window.CCM.c;
   const D = window.CCM_DATA;
   const demo = window.CCM_DEMO_STATE || {};
   const [searchFocused, setSearchFocused] = React.useState(!!demo.searchFocused);
   const [query, setQuery] = React.useState("");
   const [filtersOpen, setFiltersOpen] = React.useState(!!demo.filtersOpen);
-  const [markerModalOpen, setMarkerModalOpen] = React.useState(false);
-  const [markerSortMode, setMarkerSortMode] = React.useState(null); // null | "page" | "all"
+  // Modal de ordenação aberto para qual coluna (null = fechado).
+  // Aceita: "marcador" | "dataInicio" | "dataAtualizacao" | "sla"
+  const [sortModalOpen, setSortModalOpen] = React.useState(null);
+  // Sort ativo: null OU { column, mode: "page"|"all", direction: "asc"|"desc" }.
+  // Apenas uma coluna por vez. Em modo SLA, se não houver sortConfig setado,
+  // assume default {column:"sla", mode:"all", direction:"asc"} (mais atrasados primeiro).
+  const [sortConfig, setSortConfig] = React.useState(null);
+  // Direção default por coluna (quando o usuário acabou de abrir o modal pela 1ª vez)
+  const DEFAULT_SORT_DIRECTION = {
+    marcador: "asc", dataInicio: "desc", dataAtualizacao: "desc", sla: "asc",
+  };
+  // SLA mode sem sortConfig explícito → assume sort por SLA
+  const effectiveSortConfig = sortConfig
+    || (isSlaMode ? { column: "sla", mode: "all", direction: "asc" } : null);
   const [openMenuId, setOpenMenuId] = React.useState(null);
   const [menuPos, setMenuPos] = React.useState({ top: 0, left: 0 });
   const [novaConversaOpen, setNovaConversaOpen] = React.useState(false);
@@ -107,16 +154,56 @@ const AtendimentosList = ({
   }, [openMenuId]);
 
   // ─────────────────────────────────────────────
-  // Sort by marker — group atendimentos by their first marker label
-  // "page" → sort only first 10 items (current page)
-  // "all"  → sort full list regardless of pagination
+  // Sort por coluna — marcador (agrupa por label do 1º marcador) ou
+  // datas (parse de "DD/MM/AA - HH:mm", mais recente primeiro).
+  // "page" → ordena apenas os primeiros PAGE_SIZE itens
+  // "all"  → ordena a lista inteira
   // ─────────────────────────────────────────────
   const PAGE_SIZE = 10;
-  const sortByMarker = (arr) => [...arr].sort((a, b) => {
-    const am = a.marcadores?.[0]?.label || "zzz_sem_marcador";
-    const bm = b.marcadores?.[0]?.label || "zzz_sem_marcador";
-    return am.localeCompare(bm, "pt-BR");
-  });
+
+  // Parse de string "31/12/25 - 14:32" → ms epoch (0 se inválido)
+  const parseAtendimentoDate = (s) => {
+    if (!s) return 0;
+    const m = s.match(/(\d{2})\/(\d{2})\/(\d{2}) - (\d{2}):(\d{2})/);
+    if (!m) return 0;
+    return new Date(2000 + Number(m[3]), Number(m[2]) - 1, Number(m[1]), Number(m[4]), Number(m[5])).getTime();
+  };
+
+  // dataAtualizacao = dataInicio + offset determinístico (1-72h) pelo hash do id.
+  // No Angular vem direto do backend (last_activity_at do atendimento).
+  const formatAtendimentoDate = (d) => {
+    const p = n => String(n).padStart(2, "0");
+    return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${String(d.getFullYear()).slice(2)} - ${p(d.getHours())}:${p(d.getMinutes())}`;
+  };
+  const getDataAtualizacao = (a) => {
+    if (a.dataAtualizacao) return a.dataAtualizacao;
+    const ms = parseAtendimentoDate(a.dataInicio);
+    if (!ms) return a.dataInicio || "—";
+    const hash = String(a.id).split("").reduce((s, ch) => (s * 31 + ch.charCodeAt(0)) | 0, 0);
+    const offsetHours = (Math.abs(hash) % 72) + 1;
+    return formatAtendimentoDate(new Date(ms + offsetHours * 3600 * 1000));
+  };
+
+  const sortByColumn = (arr, column, direction = "asc") => {
+    const mult = direction === "desc" ? -1 : 1;
+    if (column === "marcador") {
+      return [...arr].sort((a, b) => {
+        const am = a.marcadores?.[0]?.label || "zzz_sem_marcador";
+        const bm = b.marcadores?.[0]?.label || "zzz_sem_marcador";
+        return mult * am.localeCompare(bm, "pt-BR");
+      });
+    }
+    if (column === "dataInicio") {
+      return [...arr].sort((a, b) => mult * (parseAtendimentoDate(a.dataInicio) - parseAtendimentoDate(b.dataInicio)));
+    }
+    if (column === "dataAtualizacao") {
+      return [...arr].sort((a, b) => mult * (parseAtendimentoDate(getDataAtualizacao(a)) - parseAtendimentoDate(getDataAtualizacao(b))));
+    }
+    if (column === "sla") {
+      return [...arr].sort((a, b) => mult * (window.CCM.slaTagToMinutes(a.slaTag) - window.CCM.slaTagToMinutes(b.slaTag)));
+    }
+    return arr;
+  };
 
   const displayedAtendimentos = React.useMemo(() => {
     const meId = D.attendant?.id;
@@ -139,23 +226,17 @@ const AtendimentosList = ({
     if (favoritesOnly && favoritedIds) {
       src = src.filter(a => favoritedIds.has(a.id));
     }
-    // Modo SLA: ordena por minutos. asc = mais atrasados primeiro (negativos
-    // primeiro), desc = mais atrasados último. Sobrescreve qualquer outra ordenação.
-    if (isSlaMode) {
-      const mult = slaSortDir === "asc" ? 1 : -1;
-      src = [...src].sort((a, b) =>
-        mult * (window.CCM.slaTagToMinutes(a.slaTag) - window.CCM.slaTagToMinutes(b.slaTag))
-      );
-      return src;
-    }
-    if (markerSortMode === "all") return sortByMarker(src);
-    if (markerSortMode === "page") {
+    // Ordenação unificada — modo SLA tem default implícito (column:"sla", asc, all)
+    // mas o usuário pode sobrescrever pela própria modal da coluna SLA.
+    const cfg = effectiveSortConfig;
+    if (cfg?.mode === "all") return sortByColumn(src, cfg.column, cfg.direction);
+    if (cfg?.mode === "page") {
       const head = src.slice(0, PAGE_SIZE);
       const tail = src.slice(PAGE_SIZE);
-      return [...sortByMarker(head), ...tail];
+      return [...sortByColumn(head, cfg.column, cfg.direction), ...tail];
     }
     return src;
-  }, [D.atendimentos, markerSortMode, statusOverrides, viewScope, D.attendant?.id, favoritesOnly, favoritedIds, queue, D.queues, isSlaMode, slaSortDir]);
+  }, [D.atendimentos, effectiveSortConfig, statusOverrides, viewScope, D.attendant?.id, favoritesOnly, favoritedIds, queue, D.queues]);
 
   React.useEffect(() => {
     const onClick = (e) => {
@@ -231,26 +312,9 @@ const AtendimentosList = ({
               />
             )}
 
-            {isSlaMode && (
-              <button
-                onClick={() => setSlaSortDir(d => d === "asc" ? "desc" : "asc")}
-                title="Clique pra inverter a ordem"
-                style={{
-                  display: "inline-flex", alignItems: "center", gap: 6,
-                  padding: "7px 12px", borderRadius: 999,
-                  background: "#fff4e0", color: "#a8660a",
-                  border: "1px solid #f5c97d",
-                  fontSize: 12, fontWeight: 600, cursor: "pointer",
-                  fontFamily: "Montserrat, sans-serif",
-                  transition: "background 120ms ease",
-                }}
-                onMouseEnter={e => e.currentTarget.style.background = "#ffe9c2"}
-                onMouseLeave={e => e.currentTarget.style.background = "#fff4e0"}
-              >
-                <i className={`ph ${slaSortDir === "asc" ? "ph-sort-descending" : "ph-sort-ascending"}`} style={{ fontSize: 14 }} />
-                Ordenado por SLA ({slaSortDir === "asc" ? "mais atrasados primeiro" : "mais atrasados último"})
-              </button>
-            )}
+            {/* Modo SLA: o card amarelo foi removido. A ordenação agora é
+                acionada clicando no header da coluna SLA (mesma modal das
+                outras colunas) — escopo (página/todos) + direção (asc/desc). */}
 
             {/* View mode chips — disponível em todos os modos, inclusive SLA */}
             <div style={{
@@ -266,51 +330,54 @@ const AtendimentosList = ({
                 const hovered = hoveredBtn === `chip-${v}`;
                 const showLabel = active || hovered;
                 return (
-                  <button
-                    key={v}
-                    onClick={() => setViewMode(v)}
-                    onMouseEnter={() => setHoveredBtn(`chip-${v}`)}
-                    onMouseLeave={() => setHoveredBtn(null)}
-                    title={label}
-                    style={{
-                      height: 30, padding: "0 10px", border: 0, borderRadius: 7,
-                      background: active ? "#fff" : "transparent",
-                      color: active ? c.primary : c.fg2,
-                      cursor: "pointer", display: "flex", alignItems: "center",
-                      fontFamily: "Montserrat, sans-serif",
-                      fontSize: 12, fontWeight: active ? 700 : 500,
-                      boxShadow: active ? "0 1px 3px rgba(40,41,61,0.10)" : "none",
-                      transition: "background 180ms ease, color 180ms ease, box-shadow 180ms ease",
-                    }}
-                  >
-                    <i className={`ph ${icon}`} style={{ fontSize: 15 }} />
-                    <HoverLabel show={showLabel}>{label}</HoverLabel>
-                  </button>
+                  <CCMTooltip key={v} label={label}>
+                    <button
+                      onClick={() => setViewMode(v)}
+                      onMouseEnter={() => setHoveredBtn(`chip-${v}`)}
+                      onMouseLeave={() => setHoveredBtn(null)}
+                      aria-label={label}
+                      style={{
+                        height: 30, padding: "0 10px", border: 0, borderRadius: 7,
+                        background: active ? "#fff" : "transparent",
+                        color: active ? c.primary : c.fg2,
+                        cursor: "pointer", display: "flex", alignItems: "center",
+                        fontFamily: "Montserrat, sans-serif",
+                        fontSize: 12, fontWeight: active ? 700 : 500,
+                        boxShadow: active ? "0 1px 3px rgba(40,41,61,0.10)" : "none",
+                        transition: "background 180ms ease, color 180ms ease, box-shadow 180ms ease",
+                      }}
+                    >
+                      <i className={`ph ${icon}`} style={{ fontSize: 15 }} />
+                      <HoverLabel show={showLabel}>{label}</HoverLabel>
+                    </button>
+                  </CCMTooltip>
                 );
               })}
             </div>
 
             {isSemFila && (
-              <button
-                type="button"
-                onClick={() => setIaModalOpen(true)}
-                onMouseEnter={() => setHoveredBtn("ia")}
-                onMouseLeave={() => setHoveredBtn(null)}
-                title="Transferir atendimentos por I.A."
-                style={{
-                  width: 38, height: 38, borderRadius: 10, border: 0,
-                  background: c.primary, color: "#fff", cursor: "pointer",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  boxShadow: hoveredBtn === "ia"
-                    ? "0 4px 12px rgba(146,64,255,0.42)"
-                    : "0 2px 6px rgba(146,64,255,0.30)",
-                  transition: "box-shadow 150ms ease, transform 150ms ease",
-                  transform: hoveredBtn === "ia" ? "translateY(-1px)" : "none",
-                  position: "relative",
-                }}
-              >
-                <i className="ph-fill ph-brain" style={{ fontSize: 18 }} />
-              </button>
+              <CCMTooltip label="Transferir atendimentos por I.A.">
+                <button
+                  type="button"
+                  onClick={() => setIaModalOpen(true)}
+                  onMouseEnter={() => setHoveredBtn("ia")}
+                  onMouseLeave={() => setHoveredBtn(null)}
+                  aria-label="Transferir atendimentos por I.A."
+                  style={{
+                    width: 38, height: 38, borderRadius: 10, border: 0,
+                    background: c.primary, color: "#fff", cursor: "pointer",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    boxShadow: hoveredBtn === "ia"
+                      ? "0 4px 12px rgba(146,64,255,0.42)"
+                      : "0 2px 6px rgba(146,64,255,0.30)",
+                    transition: "box-shadow 150ms ease, transform 150ms ease",
+                    transform: hoveredBtn === "ia" ? "translateY(-1px)" : "none",
+                    position: "relative",
+                  }}
+                >
+                  <i className="ph-fill ph-brain" style={{ fontSize: 18 }} />
+                </button>
+              </CCMTooltip>
             )}
 
             <IconLabelButton
@@ -355,24 +422,28 @@ const AtendimentosList = ({
             <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 960 }}>
               <thead>
                 <tr style={{ background: "#fafbfd", position: "sticky", top: 0, zIndex: 3 }}>
-                  {[
-                    { label: "ID" },
-                    // No modo SLA, SLA vai pra 2ª coluna (logo após ID) e some do final
-                    ...(isSlaMode ? [{ label: "SLA", active: true }] : []),
-                    { label: "Nome" },
-                    ...(isSlaMode ? [
-                      { label: "Operação" },
-                      { label: "Fila" },
-                    ] : []),
-                    { label: "Data início" },
-                    { label: "Marcadores", sort: true, onClick: () => setMarkerModalOpen(true), active: !!markerSortMode },
-                    { label: "Contatos" },
-                    { label: "Atendentes" },
-                    { label: "Conversas" },
-                    { label: "Status" },
-                    ...(isSlaMode ? [] : [{ label: "SLA" }]),
-                    { label: "Ações", sticky: true },
-                  ].map(({ label, sort, sticky, onClick, active }) => (
+                  {(() => {
+                    const slaCol = { label: "SLA", column: "sla", sort: true, onClick: () => setSortModalOpen("sla"), active: effectiveSortConfig?.column === "sla" };
+                    return [
+                      { label: "ID" },
+                      // No modo SLA, SLA vai pra 2ª coluna (logo após ID) e some do final
+                      ...(isSlaMode ? [slaCol] : []),
+                      { label: "Nome" },
+                      ...(isSlaMode ? [
+                        { label: "Operação" },
+                        { label: "Fila" },
+                      ] : []),
+                      { label: "Data início",       column: "dataInicio",      sort: true, onClick: () => setSortModalOpen("dataInicio"),      active: effectiveSortConfig?.column === "dataInicio" },
+                      { label: "Data atualização",  column: "dataAtualizacao", sort: true, onClick: () => setSortModalOpen("dataAtualizacao"), active: effectiveSortConfig?.column === "dataAtualizacao" },
+                      { label: "Marcadores",        column: "marcador",        sort: true, onClick: () => setSortModalOpen("marcador"),        active: effectiveSortConfig?.column === "marcador" },
+                      { label: "Contatos" },
+                      { label: "Atendentes" },
+                      { label: "Conversas" },
+                      { label: "Status" },
+                      ...(isSlaMode ? [] : [slaCol]),
+                      { label: "Ações", sticky: true },
+                    ];
+                  })().map(({ label, sort, sticky, onClick, active }) => (
                     <th key={label}
                       onClick={onClick}
                       style={{
@@ -397,14 +468,21 @@ const AtendimentosList = ({
                       )}
                       <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
                         {label}
-                        {sort && <i className={`ph ${active ? "ph-arrow-down" : "ph-arrows-down-up"}`} style={{ fontSize: 11, opacity: active ? 1 : 0.5 }} />}
+                        {sort && (
+                          <i
+                            className={`ph ${active
+                              ? (effectiveSortConfig?.direction === "asc" ? "ph-arrow-up" : "ph-arrow-down")
+                              : "ph-arrows-down-up"}`}
+                            style={{ fontSize: 11, opacity: active ? 1 : 0.5 }}
+                          />
+                        )}
                         {active && (
                           <span style={{
                             background: c.primary, color: "#fff",
                             fontSize: 8, fontWeight: 700, padding: "1px 6px",
                             borderRadius: 999, marginLeft: 4,
                             textTransform: "uppercase", letterSpacing: "0.05em",
-                          }}>{markerSortMode === "all" ? "todos" : "página"}</span>
+                          }}>{effectiveSortConfig?.mode === "all" ? "todos" : "página"}</span>
                         )}
                       </span>
                     </th>
@@ -463,6 +541,7 @@ const AtendimentosList = ({
                         );
                       })()}
                       <td style={{ padding: "12px 16px", fontSize: 12, color: c.fg2, whiteSpace: "nowrap" }}>{a.dataInicio}</td>
+                      <td style={{ padding: "12px 16px", fontSize: 12, color: c.fg2, whiteSpace: "nowrap" }}>{getDataAtualizacao(a)}</td>
                       <td style={{ padding: "12px 16px", fontSize: 12, color: c.fg2, whiteSpace: "nowrap" }}>
                         {a.marcadores.length > 0 ? (
                           <span style={{
@@ -509,71 +588,79 @@ const AtendimentosList = ({
                           pointerEvents: "none",
                         }} />
                         <div style={{ display: "flex", gap: 6 }}>
-                          <button onClick={() => onOpenAtendimento(a.id)} title="Visualizar"
-                            style={{
-                              width: 28, height: 28, borderRadius: 8, border: 0,
-                              background: "transparent", color: c.fg2, cursor: "pointer",
-                              display: "flex", alignItems: "center", justifyContent: "center",
-                            }}
-                            onMouseEnter={e => { e.currentTarget.style.background = c.primaryLightest; e.currentTarget.style.color = c.primary; }}
-                            onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = c.fg2; }}>
-                            <i className="ph ph-eye" style={{ fontSize: 16 }} />
-                          </button>
+                          <CCMTooltip label="Visualizar">
+                            <button onClick={() => onOpenAtendimento(a.id)} aria-label="Visualizar"
+                              style={{
+                                width: 28, height: 28, borderRadius: 8, border: 0,
+                                background: "transparent", color: c.fg2, cursor: "pointer",
+                                display: "flex", alignItems: "center", justifyContent: "center",
+                              }}
+                              onMouseEnter={e => { e.currentTarget.style.background = c.primaryLightest; e.currentTarget.style.color = c.primary; }}
+                              onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = c.fg2; }}>
+                              <i className="ph ph-eye" style={{ fontSize: 16 }} />
+                            </button>
+                          </CCMTooltip>
                           {/* Estrela de favorito — laranja quando marcado, cinza no resto */}
-                          <button
-                            onClick={(e) => { e.stopPropagation(); toggleFavorite(a.id); }}
-                            title={favoritedIds.has(a.id) ? "Remover dos favoritos" : "Marcar como favorito"}
-                            style={{
-                              width: 28, height: 28, borderRadius: 8, border: 0,
-                              background: "transparent",
-                              color: favoritedIds.has(a.id) ? "#f5a623" : c.fg2,
-                              cursor: "pointer",
-                              display: "flex", alignItems: "center", justifyContent: "center",
-                              transition: "background 120ms ease, color 120ms ease",
-                            }}
-                            onMouseEnter={e => {
-                              e.currentTarget.style.background = favoritedIds.has(a.id) ? "#fff4e0" : c.primaryLightest;
-                              if (!favoritedIds.has(a.id)) e.currentTarget.style.color = "#f5a623";
-                            }}
-                            onMouseLeave={e => {
-                              e.currentTarget.style.background = "transparent";
-                              e.currentTarget.style.color = favoritedIds.has(a.id) ? "#f5a623" : c.fg2;
-                            }}
-                          >
-                            <i className={`ph${favoritedIds.has(a.id) ? "-fill" : ""} ph-star`} style={{ fontSize: 16 }} />
-                          </button>
-                          <button onClick={() => setEditAtendimentoId(a.id)} title="Editar"
-                            style={{
-                              width: 28, height: 28, borderRadius: 8, border: 0,
-                              background: "transparent", color: c.fg2, cursor: "pointer",
-                              display: "flex", alignItems: "center", justifyContent: "center",
-                            }}
-                            onMouseEnter={e => { e.currentTarget.style.background = c.primaryLightest; e.currentTarget.style.color = c.primary; }}
-                            onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = c.fg2; }}>
-                            <i className="ph ph-pencil-simple" style={{ fontSize: 16 }} />
-                          </button>
-                          <button
-                            data-row-menu="1"
-                            title="Ações"
-                            onClick={e => {
-                              e.stopPropagation();
-                              if (openMenuId === a.id) { setOpenMenuId(null); return; }
-                              const rect = e.currentTarget.getBoundingClientRect();
-                              setMenuPos({ top: rect.bottom + 4, right: window.innerWidth - rect.right });
-                              setOpenMenuId(a.id);
-                            }}
-                            style={{
-                              width: 28, height: 28, borderRadius: 8, border: 0,
-                              background: openMenuId === a.id ? c.primaryLightest : "transparent",
-                              color: openMenuId === a.id ? c.primary : c.fg2,
-                              cursor: "pointer",
-                              display: "flex", alignItems: "center", justifyContent: "center",
-                            }}
-                            onMouseEnter={e => { if (openMenuId !== a.id) { e.currentTarget.style.background = c.primaryLightest; e.currentTarget.style.color = c.primary; } }}
-                            onMouseLeave={e => { if (openMenuId !== a.id) { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = c.fg2; } }}
-                          >
-                            <i className="ph ph-tag" style={{ fontSize: 14 }} />
-                          </button>
+                          <CCMTooltip label={favoritedIds.has(a.id) ? "Remover dos favoritos" : "Marcar como favorito"}>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); toggleFavorite(a.id); }}
+                              aria-label={favoritedIds.has(a.id) ? "Remover dos favoritos" : "Marcar como favorito"}
+                              style={{
+                                width: 28, height: 28, borderRadius: 8, border: 0,
+                                background: "transparent",
+                                color: favoritedIds.has(a.id) ? "#f5a623" : c.fg2,
+                                cursor: "pointer",
+                                display: "flex", alignItems: "center", justifyContent: "center",
+                                transition: "background 120ms ease, color 120ms ease",
+                              }}
+                              onMouseEnter={e => {
+                                e.currentTarget.style.background = favoritedIds.has(a.id) ? "#fff4e0" : c.primaryLightest;
+                                if (!favoritedIds.has(a.id)) e.currentTarget.style.color = "#f5a623";
+                              }}
+                              onMouseLeave={e => {
+                                e.currentTarget.style.background = "transparent";
+                                e.currentTarget.style.color = favoritedIds.has(a.id) ? "#f5a623" : c.fg2;
+                              }}
+                            >
+                              <i className={`ph${favoritedIds.has(a.id) ? "-fill" : ""} ph-star`} style={{ fontSize: 16 }} />
+                            </button>
+                          </CCMTooltip>
+                          <CCMTooltip label="Editar">
+                            <button onClick={() => setEditAtendimentoId(a.id)} aria-label="Editar"
+                              style={{
+                                width: 28, height: 28, borderRadius: 8, border: 0,
+                                background: "transparent", color: c.fg2, cursor: "pointer",
+                                display: "flex", alignItems: "center", justifyContent: "center",
+                              }}
+                              onMouseEnter={e => { e.currentTarget.style.background = c.primaryLightest; e.currentTarget.style.color = c.primary; }}
+                              onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = c.fg2; }}>
+                              <i className="ph ph-pencil-simple" style={{ fontSize: 16 }} />
+                            </button>
+                          </CCMTooltip>
+                          <CCMTooltip label="Ações">
+                            <button
+                              data-row-menu="1"
+                              aria-label="Ações"
+                              onClick={e => {
+                                e.stopPropagation();
+                                if (openMenuId === a.id) { setOpenMenuId(null); return; }
+                                const rect = e.currentTarget.getBoundingClientRect();
+                                setMenuPos({ top: rect.bottom + 4, right: window.innerWidth - rect.right });
+                                setOpenMenuId(a.id);
+                              }}
+                              style={{
+                                width: 28, height: 28, borderRadius: 8, border: 0,
+                                background: openMenuId === a.id ? c.primaryLightest : "transparent",
+                                color: openMenuId === a.id ? c.primary : c.fg2,
+                                cursor: "pointer",
+                                display: "flex", alignItems: "center", justifyContent: "center",
+                              }}
+                              onMouseEnter={e => { if (openMenuId !== a.id) { e.currentTarget.style.background = c.primaryLightest; e.currentTarget.style.color = c.primary; } }}
+                              onMouseLeave={e => { if (openMenuId !== a.id) { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = c.fg2; } }}
+                            >
+                              <i className="ph ph-tag" style={{ fontSize: 14 }} />
+                            </button>
+                          </CCMTooltip>
                         </div>
                       </td>
                     </tr>
@@ -655,12 +742,21 @@ const AtendimentosList = ({
       {/* Filtros avançados — drawer at section level, covers local header too */}
       {filtersOpen && <FiltersPanel onClose={() => setFiltersOpen(false)} />}
 
-      {/* Modal de ordenação por marcador */}
-      {markerModalOpen && (
-        <MarkerSortModal
-          current={markerSortMode}
-          onClose={() => setMarkerModalOpen(false)}
-          onConfirm={(mode) => { setMarkerSortMode(mode); setMarkerModalOpen(false); }}
+      {/* Modal de ordenação — serve às 4 colunas: marcador, dataInicio, dataAtualizacao, sla */}
+      {sortModalOpen && (
+        <ColumnSortModal
+          column={sortModalOpen}
+          currentMode={effectiveSortConfig?.column === sortModalOpen ? effectiveSortConfig.mode : null}
+          currentDirection={effectiveSortConfig?.column === sortModalOpen ? effectiveSortConfig.direction : DEFAULT_SORT_DIRECTION[sortModalOpen]}
+          onClose={() => setSortModalOpen(null)}
+          onConfirm={(result) => {
+            if (!result) {
+              setSortConfig(null);
+            } else {
+              setSortConfig({ column: sortModalOpen, mode: result.mode, direction: result.direction });
+            }
+            setSortModalOpen(null);
+          }}
         />
       )}
 
@@ -694,23 +790,24 @@ const AtendimentosList = ({
 
 // ─────────────────────────────────────────────
 // IaTransferredBadge — chip-ícone "transferido por I.A." na linha
-// (tooltip nativo via title=)
+// (tooltip via CCMTooltip)
 // ─────────────────────────────────────────────
 const IaTransferredBadge = () => {
   const c = window.CCM.c;
   return (
-    <span
-      title="Esse atendimento foi transferido por I.A."
-      style={{
-        display: "inline-flex", alignItems: "center", justifyContent: "center",
-        width: 20, height: 20, borderRadius: 6,
-        background: c.primaryLightest, color: c.primary,
-        flexShrink: 0, cursor: "help",
-      }}
-      aria-label="Transferido por I.A."
-    >
-      <i className="ph-fill ph-brain" style={{ fontSize: 12 }} />
-    </span>
+    <CCMTooltip label="Esse atendimento foi transferido por I.A.">
+      <span
+        style={{
+          display: "inline-flex", alignItems: "center", justifyContent: "center",
+          width: 20, height: 20, borderRadius: 6,
+          background: c.primaryLightest, color: c.primary,
+          flexShrink: 0, cursor: "help",
+        }}
+        aria-label="Transferido por I.A."
+      >
+        <i className="ph-fill ph-brain" style={{ fontSize: 12 }} />
+      </span>
+    </CCMTooltip>
   );
 };
 
@@ -1295,12 +1392,14 @@ const AvatarStack = ({ list, extra }) => {
   return (
     <div style={{ display: "flex" }}>
       {visible.map((p, i) => (
-        <span key={i} title={p.name} style={{
-          width: 26, height: 26, borderRadius: "50%",
-          background: p.bg, color: p.fg, fontSize: 9, fontWeight: 700,
-          display: "flex", alignItems: "center", justifyContent: "center",
-          border: "2px solid #fff", marginLeft: i === 0 ? 0 : -8,
-        }}>{p.initials}</span>
+        <CCMTooltip key={i} label={p.name}>
+          <span aria-label={p.name} style={{
+            width: 26, height: 26, borderRadius: "50%",
+            background: p.bg, color: p.fg, fontSize: 9, fontWeight: 700,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            border: "2px solid #fff", marginLeft: i === 0 ? 0 : -8,
+          }}>{p.initials}</span>
+        </CCMTooltip>
       ))}
       {extra && (
         <span style={{
@@ -1438,6 +1537,19 @@ const FiltersPanel = ({ onClose }) => {
   const [statusF, setStatusF] = React.useState([]);
   const [slaF, setSlaF] = React.useState([]);
   const [iaF, setIaF] = React.useState([]);
+  const [marcF, setMarcF] = React.useState([]);
+
+  // Lista única de marcadores presentes nos dados (pra montar as opções do dropdown).
+  // No Angular: virá do endpoint /markers (cache local). label + color.
+  const MARC_LIST = React.useMemo(() => {
+    const seen = new Map();
+    for (const a of D.atendimentos || []) {
+      for (const m of a.marcadores || []) {
+        if (!seen.has(m.label)) seen.set(m.label, m);
+      }
+    }
+    return [...seen.values()].sort((a, b) => a.label.localeCompare(b.label, "pt-BR"));
+  }, [D.atendimentos]);
 
   const toggle = (arr, setArr, v) =>
     setArr(arr.includes(v) ? arr.filter(x => x !== v) : [...arr, v]);
@@ -1481,6 +1593,9 @@ const FiltersPanel = ({ onClose }) => {
       { v: "sim",   l: "Redirecionado por I.A.",     color: "#3a8fb9", bg: "#e8f7ff" },
       { v: "nao",   l: "Não redirecionado por I.A.", color: "#f54336", bg: "#ffdde3" },
     ]);
+    if (openDd === "marc") return f(MARC_LIST.map(m => ({
+      v: m.label, l: m.label, color: m.color, bg: m.color + "1A",
+    })));
     return [];
   };
 
@@ -1489,6 +1604,7 @@ const FiltersPanel = ({ onClose }) => {
     if (openDd === "status") return statusF.includes(v);
     if (openDd === "sla")    return slaF.includes(v);
     if (openDd === "ia")     return iaF.includes(v);
+    if (openDd === "marc")   return marcF.includes(v);
     return false;
   };
 
@@ -1497,6 +1613,7 @@ const FiltersPanel = ({ onClose }) => {
     if (openDd === "status") { toggle(statusF, setStatusF, v); return; }
     if (openDd === "sla")    { toggle(slaF, setSlaF, v); return; }
     if (openDd === "ia")     { toggle(iaF, setIaF, v); return; }
+    if (openDd === "marc")   { toggle(marcF, setMarcF, v); return; }
   };
 
   React.useEffect(() => {
@@ -1511,6 +1628,7 @@ const FiltersPanel = ({ onClose }) => {
     { id: "status", label: "Status do atendimento" },
     { id: "atend",  label: "Atendentes" },
     { id: "sla",    label: "SLA" },
+    { id: "marc",   label: "Marcadores" },
     { id: "ia",     label: "Redirecionamento por I.A." },
   ];
 
@@ -1733,25 +1851,66 @@ const EmptyState = () => {
 };
 
 // ─────────────────────────────────────────────
-// MarkerSortModal — pick grouping mode for the Marcadores column
+// ColumnSortModal — escolhe o escopo (página/todos) ao ordenar uma coluna.
+// Reusado pelas 3 colunas ordenáveis: "marcador", "dataInicio", "dataAtualizacao".
+// O conteúdo (título, ícone, ações) é parametrizado por COLUMN_SORT_CONFIG.
 // ─────────────────────────────────────────────
-const MarkerSortModal = ({ current, onClose, onConfirm }) => {
-  const c = window.CCM.c;
-  const [mode, setMode] = React.useState(current || "page");
+const COLUMN_SORT_CONFIG = {
+  marcador: {
+    icon: "ph-tag",
+    modalTitle: "Ordenar por marcadores",
+    description: "Escolha o escopo do agrupamento. A ordenação será aplicada a partir do primeiro marcador de cada atendimento.",
+    actionPage: "Agrupa por marcador apenas os atendimentos visíveis na página atual. Outras páginas mantêm sua ordem original.",
+    actionAll:  "Agrupa por marcador a lista inteira, independente da paginação. Itens podem mudar de página.",
+    directions: [
+      { value: "asc",  title: "A → Z (alfabético)", desc: "Marcadores em ordem alfabética crescente." },
+      { value: "desc", title: "Z → A (alfabético)", desc: "Marcadores em ordem alfabética decrescente." },
+    ],
+  },
+  dataInicio: {
+    icon: "ph-calendar-plus",
+    modalTitle: "Ordenar por data de início",
+    description: "Escolha o escopo da ordenação por data de criação do atendimento.",
+    actionPage: "Ordena por data de início apenas os atendimentos visíveis na página atual. Outras páginas mantêm sua ordem original.",
+    actionAll:  "Ordena por data de início a lista inteira, independente da paginação. Itens podem mudar de página.",
+    directions: [
+      { value: "desc", title: "Mais recentes primeiro", desc: "Atendimentos iniciados há menos tempo aparecem antes." },
+      { value: "asc",  title: "Mais antigos primeiro",  desc: "Atendimentos iniciados há mais tempo aparecem antes." },
+    ],
+  },
+  dataAtualizacao: {
+    icon: "ph-clock-counter-clockwise",
+    modalTitle: "Ordenar por data de atualização",
+    description: "Escolha o escopo da ordenação por última atividade (mensagem, alteração de status, etc.).",
+    actionPage: "Ordena por data de atualização apenas os atendimentos visíveis na página atual. Outras páginas mantêm sua ordem original.",
+    actionAll:  "Ordena por data de atualização a lista inteira, independente da paginação. Itens podem mudar de página.",
+    directions: [
+      { value: "desc", title: "Atualizações mais recentes", desc: "Atendimentos com atividade mais recente aparecem antes." },
+      { value: "asc",  title: "Atualizações mais antigas",  desc: "Atendimentos sem atividade há mais tempo aparecem antes." },
+    ],
+  },
+  sla: {
+    icon: "ph-clock-countdown",
+    modalTitle: "Ordenar por SLA",
+    description: "Escolha o escopo e a direção da ordenação pelo prazo de SLA dos atendimentos.",
+    actionPage: "Ordena por SLA apenas os atendimentos visíveis na página atual. Outras páginas mantêm sua ordem original.",
+    actionAll:  "Ordena por SLA a lista inteira, independente da paginação. Itens podem mudar de página.",
+    directions: [
+      { value: "asc",  title: "Mais atrasados primeiro", desc: "Atendimentos com maior atraso no SLA aparecem antes (mais urgentes)." },
+      { value: "desc", title: "Mais atrasados último",   desc: "Atendimentos com SLA mais folgado aparecem antes." },
+    ],
+  },
+};
 
-  const options = [
-    {
-      value: "page",
-      title: "Ordenar por paginação",
-      desc: "Agrupa por marcador apenas os atendimentos visíveis na página atual. Outras páginas mantêm sua ordem original.",
-      icon: "ph-list-numbers",
-    },
-    {
-      value: "all",
-      title: "Ordenar por todos os atendimentos",
-      desc: "Agrupa por marcador a lista inteira, independente da paginação. Itens podem mudar de página.",
-      icon: "ph-stack",
-    },
+const ColumnSortModal = ({ column, currentMode, currentDirection, onClose, onConfirm }) => {
+  const c = window.CCM.c;
+  const cfg = COLUMN_SORT_CONFIG[column] || COLUMN_SORT_CONFIG.marcador;
+  const [mode, setMode] = React.useState(currentMode || "page");
+  const [direction, setDirection] = React.useState(currentDirection || cfg.directions[0].value);
+
+  const scopeOptions = [
+    { value: "page", title: "Ordenar por paginação",            desc: cfg.actionPage, icon: "ph-list-numbers" },
+    { value: "all",  title: "Ordenar por todos os atendimentos", desc: cfg.actionAll,  icon: "ph-stack" },
   ];
 
   // ESC to close
@@ -1774,8 +1933,8 @@ const MarkerSortModal = ({ current, onClose, onConfirm }) => {
       }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
           <h3 style={{ margin: 0, fontSize: 16, fontWeight: 600, color: c.fg1, display: "flex", alignItems: "center", gap: 8 }}>
-            <i className="ph ph-tag" style={{ fontSize: 18, color: c.primary }} />
-            Ordenar por marcadores
+            <i className={`ph ${cfg.icon}`} style={{ fontSize: 18, color: c.primary }} />
+            {cfg.modalTitle}
           </h3>
           <button onClick={onClose} style={{
             border: 0, background: "transparent", color: c.fg2, cursor: "pointer",
@@ -1784,21 +1943,24 @@ const MarkerSortModal = ({ current, onClose, onConfirm }) => {
           }}><i className="ph ph-x" style={{ fontSize: 16 }} /></button>
         </div>
         <p style={{ margin: "0 0 18px", fontSize: 12, color: c.fg2, lineHeight: 1.5 }}>
-          Escolha o escopo do agrupamento. A ordenação será aplicada a partir do primeiro marcador de cada atendimento.
+          {cfg.description}
         </p>
 
-        <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 20 }}>
-          {options.map(o => {
-            const selected = mode === o.value;
+        {/* ── Direção ── */}
+        <div style={{ fontSize: 10, fontWeight: 700, color: c.fg3, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>
+          Direção
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 18 }}>
+          {cfg.directions.map(d => {
+            const selected = direction === d.value;
             return (
-              <label key={o.value} onClick={() => setMode(o.value)} style={{
+              <label key={d.value} onClick={() => setDirection(d.value)} style={{
                 display: "flex", alignItems: "flex-start", gap: 12,
-                padding: "14px 16px", borderRadius: 12, cursor: "pointer",
+                padding: "12px 14px", borderRadius: 12, cursor: "pointer",
                 background: selected ? c.primaryLightest : "#fff",
                 border: `1.5px solid ${selected ? c.primary : c.border}`,
                 transition: "background 150ms ease, border-color 150ms ease",
               }}>
-                {/* Radio */}
                 <span style={{
                   width: 18, height: 18, borderRadius: "50%", flexShrink: 0, marginTop: 1,
                   border: `2px solid ${selected ? c.primary : c.border}`,
@@ -1807,27 +1969,55 @@ const MarkerSortModal = ({ current, onClose, onConfirm }) => {
                 }}>
                   {selected && <span style={{ width: 8, height: 8, borderRadius: "50%", background: c.primary }} />}
                 </span>
-                {/* Content */}
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <i className={`ph ${o.icon}`} style={{ fontSize: 15, color: selected ? c.primary : c.fg2 }} />
-                    <span style={{ fontSize: 13, fontWeight: 600, color: selected ? c.primary : c.fg1 }}>
-                      {o.title}
-                    </span>
+                    <i className={`ph ${d.value === "asc" ? "ph-arrow-up" : "ph-arrow-down"}`} style={{ fontSize: 14, color: selected ? c.primary : c.fg2 }} />
+                    <span style={{ fontSize: 13, fontWeight: 600, color: selected ? c.primary : c.fg1 }}>{d.title}</span>
                   </div>
-                  <div style={{ fontSize: 11, color: c.fg2, marginTop: 4, lineHeight: 1.5 }}>
-                    {o.desc}
-                  </div>
+                  <div style={{ fontSize: 11, color: c.fg2, marginTop: 3, lineHeight: 1.5 }}>{d.desc}</div>
                 </div>
-                <input type="radio" name="marker-sort-mode" checked={selected} readOnly
-                  style={{ position: "absolute", opacity: 0, pointerEvents: "none" }} />
+              </label>
+            );
+          })}
+        </div>
+
+        {/* ── Escopo ── */}
+        <div style={{ fontSize: 10, fontWeight: 700, color: c.fg3, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>
+          Escopo
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 20 }}>
+          {scopeOptions.map(o => {
+            const selected = mode === o.value;
+            return (
+              <label key={o.value} onClick={() => setMode(o.value)} style={{
+                display: "flex", alignItems: "flex-start", gap: 12,
+                padding: "12px 14px", borderRadius: 12, cursor: "pointer",
+                background: selected ? c.primaryLightest : "#fff",
+                border: `1.5px solid ${selected ? c.primary : c.border}`,
+                transition: "background 150ms ease, border-color 150ms ease",
+              }}>
+                <span style={{
+                  width: 18, height: 18, borderRadius: "50%", flexShrink: 0, marginTop: 1,
+                  border: `2px solid ${selected ? c.primary : c.border}`,
+                  background: "#fff",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                }}>
+                  {selected && <span style={{ width: 8, height: 8, borderRadius: "50%", background: c.primary }} />}
+                </span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <i className={`ph ${o.icon}`} style={{ fontSize: 14, color: selected ? c.primary : c.fg2 }} />
+                    <span style={{ fontSize: 13, fontWeight: 600, color: selected ? c.primary : c.fg1 }}>{o.title}</span>
+                  </div>
+                  <div style={{ fontSize: 11, color: c.fg2, marginTop: 3, lineHeight: 1.5 }}>{o.desc}</div>
+                </div>
               </label>
             );
           })}
         </div>
 
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-          {current ? (
+          {currentMode ? (
             <button onClick={() => onConfirm(null)} style={{
               border: 0, background: "transparent", cursor: "pointer",
               fontFamily: "Montserrat, sans-serif", fontSize: 12, fontWeight: 600,
@@ -1842,7 +2032,7 @@ const MarkerSortModal = ({ current, onClose, onConfirm }) => {
               background: "#fff", color: c.fg1, fontWeight: 600, cursor: "pointer",
               fontFamily: "Montserrat, sans-serif", fontSize: 13,
             }}>Cancelar</button>
-            <button onClick={() => onConfirm(mode)} style={{
+            <button onClick={() => onConfirm({ mode, direction })} style={{
               padding: "0 18px", height: 40, borderRadius: 12, border: 0,
               background: c.primary, color: "#fff", fontWeight: 600, cursor: "pointer",
               fontFamily: "Montserrat, sans-serif", fontSize: 13,
@@ -2281,17 +2471,22 @@ const KanbanCard = ({ a, onOpen, onEdit, barColor }) => {
   const titulo = a.titulo.split("—")[0].trim();
 
   const iconBtn = (icon, title, handler) => (
-    <button onClick={(e) => { e.stopPropagation(); handler(); }} title={title}
-      style={{
-        width: 26, height: 26, borderRadius: 7, border: 0,
-        background: "transparent", color: c.fg2, cursor: "pointer",
-        display: "flex", alignItems: "center", justifyContent: "center",
-      }}
-      onMouseEnter={e => { e.currentTarget.style.background = c.primaryLightest; e.currentTarget.style.color = c.primary; }}
-      onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = c.fg2; }}
-    >
-      <i className={`ph ${icon}`} style={{ fontSize: 14 }} />
-    </button>
+    <CCMTooltip label={title}>
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); handler(); }}
+        aria-label={title}
+        style={{
+          width: 26, height: 26, borderRadius: 7, border: 0,
+          background: "transparent", color: c.fg2, cursor: "pointer",
+          display: "flex", alignItems: "center", justifyContent: "center",
+        }}
+        onMouseEnter={e => { e.currentTarget.style.background = c.primaryLightest; e.currentTarget.style.color = c.primary; }}
+        onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = c.fg2; }}
+      >
+        <i className={`ph ${icon}`} style={{ fontSize: 14 }} />
+      </button>
+    </CCMTooltip>
   );
 
   return (
@@ -2588,36 +2783,57 @@ const GanttView = ({ atendimentos, onOpenAtendimento, onEdit }) => {
                   borderBottom: `1px solid ${c.borderSoft}`,
                   background: idx % 2 === 1 ? "#fcfdfe" : "#fff",
                 }}>
-                  <div
-                    title={titleAttr}
-                    onClick={() => onOpenAtendimento(a.id)}
-                    style={{
-                      position: "absolute",
-                      left: leftPx, top: 8, height: ROW_HEIGHT - 16,
-                      width: widthPx,
-                      background: sv.bar,
-                      // Barras em andamento ganham padrão listrado sutil pra indicar visualmente
-                      backgroundImage: a.ongoing
-                        ? `repeating-linear-gradient(135deg, rgba(255,255,255,0.18) 0 6px, transparent 6px 12px), linear-gradient(${sv.bar}, ${sv.bar})`
-                        : undefined,
-                      borderRadius: 8,
-                      display: "flex", alignItems: "center", padding: "0 10px", gap: 6,
-                      color: "#fff", fontSize: 11, fontWeight: 700,
-                      cursor: "pointer", overflow: "hidden",
-                      boxShadow: "0 1px 4px rgba(40,41,61,0.18)",
-                      transition: "transform 150ms ease, box-shadow 150ms ease",
-                    }}
-                    onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-1px)"; e.currentTarget.style.boxShadow = "0 4px 10px rgba(40,41,61,0.22)"; }}
-                    onMouseLeave={e => { e.currentTarget.style.transform = "none"; e.currentTarget.style.boxShadow = "0 1px 4px rgba(40,41,61,0.18)"; }}
-                  >
-                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {barText}
-                    </span>
-                  </div>
+                  <CCMTooltip label={titleAttr}>
+                    <div
+                      aria-label={titleAttr}
+                      onClick={() => onOpenAtendimento(a.id)}
+                      style={{
+                        position: "absolute",
+                        left: leftPx, top: 8, height: ROW_HEIGHT - 16,
+                        width: widthPx,
+                        background: sv.bar,
+                        // Barras em andamento ganham padrão listrado sutil pra indicar visualmente
+                        backgroundImage: a.ongoing
+                          ? `repeating-linear-gradient(135deg, rgba(255,255,255,0.18) 0 6px, transparent 6px 12px), linear-gradient(${sv.bar}, ${sv.bar})`
+                          : undefined,
+                        borderRadius: 8,
+                        display: "flex", alignItems: "center", padding: "0 10px", gap: 6,
+                        color: "#fff", fontSize: 11, fontWeight: 700,
+                        cursor: "pointer", overflow: "hidden",
+                        boxShadow: "0 1px 4px rgba(40,41,61,0.18)",
+                        transition: "transform 150ms ease, box-shadow 150ms ease",
+                      }}
+                      onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-1px)"; e.currentTarget.style.boxShadow = "0 4px 10px rgba(40,41,61,0.22)"; }}
+                      onMouseLeave={e => { e.currentTarget.style.transform = "none"; e.currentTarget.style.boxShadow = "0 1px 4px rgba(40,41,61,0.18)"; }}
+                    >
+                      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {barText}
+                      </span>
+                    </div>
+                  </CCMTooltip>
                 </div>
               );
             })}
           </div>
+        </div>
+      </div>
+
+      {/* ── Paginação — mesmo footer da visão Lista ── */}
+      <div style={{
+        padding: "10px 16px", display: "flex", alignItems: "center", justifyContent: "space-between",
+        fontSize: 12, color: c.fg2, borderTop: `1px solid ${c.borderSoft}`, flexShrink: 0,
+        background: "#fff",
+      }}>
+        <span>{atendimentos.length}/{atendimentos.length} itens</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <i className="ph ph-caret-left" style={{ fontSize: 14, cursor: "pointer" }} />
+          <span style={{ color: c.fg1, fontWeight: 600 }}>1</span>
+          <i className="ph ph-caret-right" style={{ fontSize: 14, cursor: "pointer" }} />
+          <span style={{
+            border: `1px solid ${c.border}`, borderRadius: 8, padding: "2px 8px",
+            display: "inline-flex", alignItems: "center", gap: 4, cursor: "pointer",
+          }}>10 <i className="ph ph-caret-down" style={{ fontSize: 10 }} /></span>
+          <span>página 01 de 01</span>
         </div>
       </div>
     </div>
@@ -2821,6 +3037,36 @@ const QueueBreadcrumb = ({
 
   const renderSegment = (seg, i, opts = {}) => {
     const isCompact = !!opts.compact && seg.icon && !seg.noDropdown;
+    const btn = (
+      <button
+        onClick={(e) => handleSegClick(seg, e)}
+        aria-label={isCompact ? seg.label : undefined}
+        style={{
+          display: "inline-flex", alignItems: "center", gap: 5,
+          padding: "4px 8px", borderRadius: 7,
+          border: 0, background: openSeg === seg.key ? c.primaryLightest : "transparent",
+          color: seg.isCurrent ? c.fg1 : c.fg2,
+          fontFamily: "Montserrat, sans-serif",
+          fontSize: 12, fontWeight: seg.isCurrent ? 700 : 500,
+          cursor: "pointer",
+          maxWidth: isCompact ? 60 : 240,
+          minWidth: 0, flexShrink: 0,
+          transition: "background 120ms ease",
+        }}
+        onMouseEnter={e => { if (openSeg !== seg.key) e.currentTarget.style.background = c.borderSoft; }}
+        onMouseLeave={e => { if (openSeg !== seg.key) e.currentTarget.style.background = "transparent"; }}
+      >
+        {seg.icon && <span style={{ fontSize: 13, flexShrink: 0 }}>{seg.icon}</span>}
+        {isCompact ? (
+          <span style={{ color: c.fg3, fontSize: 12, lineHeight: 1, flexShrink: 0 }}>…</span>
+        ) : (
+          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {seg.label}
+          </span>
+        )}
+        <i className="ph ph-caret-down" style={{ fontSize: 10, color: c.fg3, flexShrink: 0 }} />
+      </button>
+    );
     return (
       <React.Fragment key={seg.key}>
         {i > 0 && (
@@ -2833,34 +3079,7 @@ const QueueBreadcrumb = ({
             whiteSpace: "nowrap", flexShrink: 0,
           }}>{seg.label}</span>
         ) : (
-          <button
-            onClick={(e) => handleSegClick(seg, e)}
-            title={isCompact ? seg.label : undefined}
-            style={{
-              display: "inline-flex", alignItems: "center", gap: 5,
-              padding: "4px 8px", borderRadius: 7,
-              border: 0, background: openSeg === seg.key ? c.primaryLightest : "transparent",
-              color: seg.isCurrent ? c.fg1 : c.fg2,
-              fontFamily: "Montserrat, sans-serif",
-              fontSize: 12, fontWeight: seg.isCurrent ? 700 : 500,
-              cursor: "pointer",
-              maxWidth: isCompact ? 60 : 240,
-              minWidth: 0, flexShrink: 0,
-              transition: "background 120ms ease",
-            }}
-            onMouseEnter={e => { if (openSeg !== seg.key) e.currentTarget.style.background = c.borderSoft; }}
-            onMouseLeave={e => { if (openSeg !== seg.key) e.currentTarget.style.background = "transparent"; }}
-          >
-            {seg.icon && <span style={{ fontSize: 13, flexShrink: 0 }}>{seg.icon}</span>}
-            {isCompact ? (
-              <span style={{ color: c.fg3, fontSize: 12, lineHeight: 1, flexShrink: 0 }}>…</span>
-            ) : (
-              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {seg.label}
-              </span>
-            )}
-            <i className="ph ph-caret-down" style={{ fontSize: 10, color: c.fg3, flexShrink: 0 }} />
-          </button>
+          isCompact ? <CCMTooltip label={seg.label}>{btn}</CCMTooltip> : btn
         )}
       </React.Fragment>
     );

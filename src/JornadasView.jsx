@@ -1,4 +1,26 @@
 // JornadasView.jsx — automated journey conversations section
+// =====================================================================
+// DE-PARA REACT → ANGULAR  ·  JornadasView.jsx
+// ---------------------------------------------------------------------
+// Inbox de conversas conduzidas automaticamente por uma "Jornada" (automação):
+// sidebar de conversas + thread + rodapé "Transferir essa conversa".
+//
+//   JornadasView/Panel  → ChatAutomationAnswersComponent <app-chat-automation-answers>
+//                         @modules/chat-one-to-one/components/chat-automation-answers/
+//                         (irmão: ChatCampaignAnswersComponent <app-chat-campaign-answers>
+//                          para a aba "Campanha")
+//   JornadaItem (lista) → item de conversa na lista (reusa padrão de chat-talks-list)
+//   JMsgBubble/JDayChip → ChatMessageComponent <app-chat-message> + chip de data
+//                         (mesmos átomos da thread principal — ver ConversaPanel.jsx)
+//   JornadasFilterPanel → modal de filtros (MatDialog two-column) +
+//                         FilterCheckboxList/RadioList → mat-checkbox/mat-radio
+//                         (tema material-checkbox.scss / material-radio.scss)
+//   FilterData (calendar)→ datepicker (tema @theme/css/material-calendar.scss)
+//   TransferModal       → UserAssignmentModalComponent <app-user-assignment-modal>
+//   O CONSTRUTOR de jornadas (não esta tela) vive em @modules/automation
+//   (AutomationComponent <app-automation>).
+// Doc: de-para/02-componentes.md
+// =====================================================================
 const JornadasView = ({ chatTab = "jornadas", onTabChange }) => {
   const D = window.CCM_DATA;
   const [activeId, setActiveId] = React.useState(D.jornadas[0]?.id || null);
@@ -150,17 +172,19 @@ const JornadasSidebar = ({ jornadas, activeId, onSelect, query, setQuery, search
               <i className="ph ph-funnel-simple" style={{ fontSize: 13 }} />
               {filterCount} {filterCount === 1 ? "filtro" : "filtros"}
             </div>
-            <div
-              onClick={e => { e.stopPropagation(); setFilters({ canais: [], jornadas: [], pendencias: null }); }}
-              title="Limpar filtros"
-              style={{
-                display: "flex", alignItems: "center", justifyContent: "center",
-                padding: "6px 9px",
-                borderLeft: `1px solid ${c.primary}`,
-              }}
-            >
-              <i className="ph ph-broom" style={{ fontSize: 13 }} />
-            </div>
+            <CCMTooltip label="Limpar filtros">
+              <div
+                onClick={e => { e.stopPropagation(); setFilters({ canais: [], jornadas: [], pendencias: null }); }}
+                aria-label="Limpar filtros"
+                style={{
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  padding: "6px 9px",
+                  borderLeft: `1px solid ${c.primary}`,
+                }}
+              >
+                <i className="ph ph-broom" style={{ fontSize: 13 }} />
+              </div>
+            </CCMTooltip>
           </div>
         ) : (
           <button
@@ -920,16 +944,21 @@ const JToolbarBtn = ({ icon, onClick, title }) => {
   const c = window.CCM.c;
   const [hover, setHover] = React.useState(false);
   return (
-    <button onClick={onClick} title={title}
-      onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
-      style={{
-        width: 32, height: 32, borderRadius: 8, border: 0,
-        background: hover ? c.borderSoft : "transparent",
-        color: c.fg2, cursor: "pointer",
-        display: "flex", alignItems: "center", justifyContent: "center",
-      }}>
-      <i className={`ph ${icon}`} style={{ fontSize: 16 }} />
-    </button>
+    <CCMTooltip label={title}>
+      <button
+        type="button"
+        onClick={onClick}
+        aria-label={title}
+        onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
+        style={{
+          width: 32, height: 32, borderRadius: 8, border: 0,
+          background: hover ? c.borderSoft : "transparent",
+          color: c.fg2, cursor: "pointer",
+          display: "flex", alignItems: "center", justifyContent: "center",
+        }}>
+        <i className={`ph ${icon}`} style={{ fontSize: 16 }} />
+      </button>
+    </CCMTooltip>
   );
 };
 

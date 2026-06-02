@@ -1,4 +1,32 @@
 // AtendimentoDetail.jsx — drill-down with Conversas / Contato / Histórico tabs
+// =====================================================================
+// DE-PARA REACT → ANGULAR  ·  AtendimentoDetail.jsx
+// ---------------------------------------------------------------------
+// Tela de detalhe do atendimento (o "olhinho 👁"): barra de topo +
+// tabs (Conversas/Contato/Histórico) à esquerda + ConversaPanel à direita.
+// Módulo Angular: @modules/chat-one-to-one.
+//
+//   AtendimentoDetail   → ChatTicketsDashboardComponent <app-chat-tickets-dashboard>
+//                         orquestrando ChatComponent <app-chat> (painel direito).
+//                         O container de layout é ChatOneToOneContainerComponent
+//                         <app-chat-one-to-one-container>.
+//   TabPill (tabs)      → SimpleTabsHeaderComponent <app-simple-tabs-header>
+//                         @shared/components/simple-tabs-header/
+//   ConversasTab/ConvCard → ChatTalksListComponent <app-chat-talks-list> (cards de conversa)
+//   HistoricoTab        → ChatSectionsHistoryComponent <app-chat-sections-history>
+//   ContatoTab          → painel de contatos do atendimento (lista de pessoas)
+//   AvatarStackHeader   → AvatarListComponent <ccm-avatar-list>
+//   PessoasPopover      → mat-menu/popover (chat-metadata-popover em popover.scss)
+//   AlterarFilaModal    → TicketAssignmentModalComponent <app-ticket-assignment-modal>
+//                         (aba Fila) + UserAssignmentModalComponent
+//                         <app-user-assignment-modal> (aba Atendente)
+//   MarcadoresPopover   → ChatAttendanceMarkersSelectionComponent
+//                         <app-chat-attendance-markers-selection>
+//   StatusDropdown      → ChatTicketStatusComponent <app-chat-ticket-status>
+//   ContatoSidePanel    → drawer de dados do contato (mat-drawer; tema material-drawer.scss)
+//   reusa ConversaPanel, TransferModal, NovaConversaModal, StatusDropdown (window.*)
+// Doc: de-para/02-componentes.md
+// =====================================================================
 const AtendimentoDetail = ({
   atendimentoId, onBack, mode = "fullscreen", onClose, onExpand,
   queue, queues, atendimentos, onSelectQueue, onSelectAtendimento,
@@ -14,6 +42,21 @@ const AtendimentoDetail = ({
   const [showTransfer, setShowTransfer] = React.useState(!!demo.showTransfer);
   const [expanded, setExpanded] = React.useState(false);
   const [novaConversaOpen, setNovaConversaOpen] = React.useState(false);
+  // Modal "Trazer conversa de outro atendimento" — operação inversa do
+  // "Vincular conversa a outro atendimento" disparado do ConversaPanel.
+  const [trazerConversaOpen, setTrazerConversaOpen] = React.useState(false);
+  // Snackbar global do detalhe — usado pelo Link/Trazer modal e por outras
+  // ações futuras de transferência/edição. Estrutura: { message, type }.
+  const [snack, setSnack] = React.useState(null);
+  const snackTimerRef = React.useRef(null);
+  const showSnack = React.useCallback((message, type = "success", durationMs = 4200) => {
+    if (snackTimerRef.current) clearTimeout(snackTimerRef.current);
+    setSnack({ message, type });
+    snackTimerRef.current = setTimeout(() => setSnack(null), durationMs);
+  }, []);
+  React.useEffect(() => () => {
+    if (snackTimerRef.current) clearTimeout(snackTimerRef.current);
+  }, []);
   const [alterarFilaOpen, setAlterarFilaOpen] = React.useState(false);
   const [marcadoresPop, setMarcadoresPop] = React.useState(null); // { top, left }
   const [contatoPanel, setContatoPanel] = React.useState(null);    // contact object
@@ -90,22 +133,26 @@ const AtendimentoDetail = ({
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
           {isPeek ? (
             <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-              <button onClick={onClose} title="Recolher" style={{
-                width: 32, height: 32, borderRadius: 8, border: 0,
-                background: "transparent", color: c.fg2, cursor: "pointer",
-                display: "flex", alignItems: "center", justifyContent: "center",
-              }}
-                onMouseEnter={e => { e.currentTarget.style.background = c.borderSoft; e.currentTarget.style.color = c.fg1; }}
-                onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = c.fg2; }}
-              ><i className="ph ph-caret-double-right" style={{ fontSize: 16 }} /></button>
-              <button onClick={onExpand} title="Expandir" style={{
-                width: 32, height: 32, borderRadius: 8, border: 0,
-                background: "transparent", color: c.fg2, cursor: "pointer",
-                display: "flex", alignItems: "center", justifyContent: "center",
-              }}
-                onMouseEnter={e => { e.currentTarget.style.background = c.borderSoft; e.currentTarget.style.color = c.fg1; }}
-                onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = c.fg2; }}
-              ><i className="ph ph-arrows-out-simple" style={{ fontSize: 16 }} /></button>
+              <CCMTooltip label="Recolher">
+                <button onClick={onClose} aria-label="Recolher" style={{
+                  width: 32, height: 32, borderRadius: 8, border: 0,
+                  background: "transparent", color: c.fg2, cursor: "pointer",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                }}
+                  onMouseEnter={e => { e.currentTarget.style.background = c.borderSoft; e.currentTarget.style.color = c.fg1; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = c.fg2; }}
+                ><i className="ph ph-caret-double-right" style={{ fontSize: 16 }} /></button>
+              </CCMTooltip>
+              <CCMTooltip label="Expandir">
+                <button onClick={onExpand} aria-label="Expandir" style={{
+                  width: 32, height: 32, borderRadius: 8, border: 0,
+                  background: "transparent", color: c.fg2, cursor: "pointer",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                }}
+                  onMouseEnter={e => { e.currentTarget.style.background = c.borderSoft; e.currentTarget.style.color = c.fg1; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = c.fg2; }}
+                ><i className="ph ph-arrows-out-simple" style={{ fontSize: 16 }} /></button>
+              </CCMTooltip>
             </div>
           ) : (
             <button onClick={onBack} style={{
@@ -138,99 +185,120 @@ const AtendimentoDetail = ({
               os contatos envolvidos em qualquer conversa). O contato
               específico da conversa aberta tem outro ponto de entrada
               (ícone 👤 na ConversaPanel). */}
-          <div
-            onClick={(e) => {
-              const r = e.currentTarget.getBoundingClientRect();
-              setContatosPop({ top: r.bottom + 8, left: r.left });
-              setAtendentesPop(null);
-            }}
-            title="Contatos do atendimento"
-            style={{
-              display: "flex", alignItems: "center", gap: 6,
-              cursor: "pointer", padding: "2px 4px", borderRadius: 8,
-              transition: "background 120ms ease",
-            }}
-            onMouseEnter={e => e.currentTarget.style.background = c.borderSoft}
-            onMouseLeave={e => e.currentTarget.style.background = "transparent"}
-          >
-            <span style={{
-              width: 28, height: 28, borderRadius: "50%",
-              background: c.secundaryLightest, color: c.secundaryMedium,
-              fontSize: 11, fontWeight: 700,
-              display: "flex", alignItems: "center", justifyContent: "center",
-            }}>{a.contatos.length}</span>
-            <AvatarStackHeader list={a.contatos} />
-          </div>
+          <CCMTooltip label="Contatos do atendimento">
+            <div
+              onClick={(e) => {
+                const r = e.currentTarget.getBoundingClientRect();
+                setContatosPop({ top: r.bottom + 8, left: r.left });
+                setAtendentesPop(null);
+              }}
+              aria-label="Contatos do atendimento"
+              style={{
+                display: "flex", alignItems: "center", gap: 6,
+                cursor: "pointer", padding: "2px 4px", borderRadius: 8,
+                transition: "background 120ms ease",
+              }}
+              onMouseEnter={e => e.currentTarget.style.background = c.borderSoft}
+              onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+            >
+              <span style={{
+                width: 28, height: 28, borderRadius: "50%",
+                background: c.secundaryLightest, color: c.secundaryMedium,
+                fontSize: 11, fontWeight: 700,
+                display: "flex", alignItems: "center", justifyContent: "center",
+              }}>{a.contatos.length}</span>
+              <AvatarStackHeader list={a.contatos} />
+            </div>
+          </CCMTooltip>
           {/* Cluster ATENDENTES — popover com nomes dos atendentes envolvidos */}
-          <div
-            onClick={(e) => {
-              const r = e.currentTarget.getBoundingClientRect();
-              setAtendentesPop({ top: r.bottom + 8, left: r.left });
-              setContatosPop(null);
+          <CCMTooltip label="Atendentes do atendimento">
+            <div
+              onClick={(e) => {
+                const r = e.currentTarget.getBoundingClientRect();
+                setAtendentesPop({ top: r.bottom + 8, left: r.left });
+                setContatosPop(null);
+              }}
+              aria-label="Atendentes do atendimento"
+              style={{
+                cursor: "pointer", padding: "2px 4px", borderRadius: 8,
+                transition: "background 120ms ease",
+              }}
+              onMouseEnter={e => e.currentTarget.style.background = c.borderSoft}
+              onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+            >
+              <AvatarStackHeader list={a.atendentes} />
+            </div>
+          </CCMTooltip>
+          <CCMTooltip label="Alterar fila de atendimento">
+            <button onClick={() => setAlterarFilaOpen(true)} aria-label="Alterar fila de atendimento" style={{
+              display: "inline-flex", alignItems: "center", gap: 6,
+              border: 0, cursor: "pointer",
+              background: c.warningLight, color: c.warningDark,
+              fontSize: 11, fontWeight: 600, padding: "5px 12px", borderRadius: 999,
+              fontFamily: "Montserrat, sans-serif",
+              transition: "opacity 150ms ease",
             }}
-            title="Atendentes do atendimento"
-            style={{
-              cursor: "pointer", padding: "2px 4px", borderRadius: 8,
-              transition: "background 120ms ease",
-            }}
-            onMouseEnter={e => e.currentTarget.style.background = c.borderSoft}
-            onMouseLeave={e => e.currentTarget.style.background = "transparent"}
-          >
-            <AvatarStackHeader list={a.atendentes} />
-          </div>
-          <button onClick={() => setAlterarFilaOpen(true)} title="Alterar fila de atendimento" style={{
-            display: "inline-flex", alignItems: "center", gap: 6,
-            border: 0, cursor: "pointer",
-            background: c.warningLight, color: c.warningDark,
-            fontSize: 11, fontWeight: 600, padding: "5px 12px", borderRadius: 999,
-            fontFamily: "Montserrat, sans-serif",
-            transition: "opacity 150ms ease",
-          }}
-            onMouseEnter={e => e.currentTarget.style.opacity = "0.85"}
-            onMouseLeave={e => e.currentTarget.style.opacity = "1"}
-          >
-            <span>{a.tipoIcon || "🔥"}</span> {currentFila}
-            <span style={{
-              background: "#fff", color: c.warningDark, padding: "0 6px",
-              borderRadius: 999, fontSize: 10,
-            }}>{a.slaTag || "-1d"}</span>
-          </button>
+              onMouseEnter={e => e.currentTarget.style.opacity = "0.85"}
+              onMouseLeave={e => e.currentTarget.style.opacity = "1"}
+            >
+              <span>{a.tipoIcon || "🔥"}</span> {currentFila}
+              <span style={{
+                background: "#fff", color: c.warningDark, padding: "0 6px",
+                borderRadius: 999, fontSize: 10,
+              }}>{a.slaTag || "-1d"}</span>
+            </button>
+          </CCMTooltip>
           {/* Status pill clicável — abre o mesmo StatusDropdown da lista */}
           {(() => {
             const sc = statusColor(currentStatus);
             return (
-              <button
-                data-status-dd="1"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  const r = e.currentTarget.getBoundingClientRect();
-                  // Ancora abaixo, alinhado à direita pra não estourar viewport
-                  setStatusDd({ top: r.bottom + 6, right: Math.max(12, window.innerWidth - r.right) });
-                }}
-                title="Alterar status do atendimento"
-                style={{
-                  background: sc.bg, color: sc.fg, border: 0,
-                  fontSize: 11, fontWeight: 600,
-                  padding: "5px 12px", borderRadius: 999,
-                  cursor: "pointer",
-                  display: "inline-flex", alignItems: "center", gap: 6,
-                  fontFamily: "Montserrat, sans-serif",
-                  transition: "filter 120ms ease",
-                }}
-                onMouseEnter={e => e.currentTarget.style.filter = "brightness(0.96)"}
-                onMouseLeave={e => e.currentTarget.style.filter = "none"}
-              >
-                {currentStatus}
-                <i className="ph ph-caret-down" style={{ fontSize: 10, opacity: 0.75 }} />
-              </button>
+              <CCMTooltip label="Alterar status do atendimento">
+                <button
+                  data-status-dd="1"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const r = e.currentTarget.getBoundingClientRect();
+                    // Ancora abaixo, alinhado à direita pra não estourar viewport
+                    setStatusDd({ top: r.bottom + 6, right: Math.max(12, window.innerWidth - r.right) });
+                  }}
+                  aria-label="Alterar status do atendimento"
+                  style={{
+                    background: sc.bg, color: sc.fg, border: 0,
+                    fontSize: 11, fontWeight: 600,
+                    padding: "5px 12px", borderRadius: 999,
+                    cursor: "pointer",
+                    display: "inline-flex", alignItems: "center", gap: 6,
+                    fontFamily: "Montserrat, sans-serif",
+                    transition: "filter 120ms ease",
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.filter = "brightness(0.96)"}
+                  onMouseLeave={e => e.currentTarget.style.filter = "none"}
+                >
+                  {currentStatus}
+                  <i className="ph ph-caret-down" style={{ fontSize: 10, opacity: 0.75 }} />
+                </button>
+              </CCMTooltip>
             );
           })()}
-          <button onClick={() => setNovaConversaOpen(true)} title="Nova conversa" style={{
-            width: 32, height: 32, borderRadius: "50%", border: 0,
-            background: c.primary, color: "#fff", cursor: "pointer",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            boxShadow: "0 2px 6px rgba(146,64,255,0.30)",
-          }}><i className="ph ph-plus" style={{ fontSize: 14 }} /></button>
+          <CCMTooltip label="Trazer conversa de outro atendimento">
+            <button onClick={() => setTrazerConversaOpen(true)} aria-label="Trazer conversa de outro atendimento" style={{
+              width: 32, height: 32, borderRadius: 8, border: `1px solid ${c.border}`,
+              background: "#fff", color: c.fg2, cursor: "pointer",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              transition: "background 120ms ease, color 120ms ease, border-color 120ms ease",
+            }}
+              onMouseEnter={e => { e.currentTarget.style.background = c.primaryLightest; e.currentTarget.style.color = c.primary; e.currentTarget.style.borderColor = c.primary; }}
+              onMouseLeave={e => { e.currentTarget.style.background = "#fff"; e.currentTarget.style.color = c.fg2; e.currentTarget.style.borderColor = c.border; }}
+            ><i className="ph ph-tray-arrow-down" style={{ fontSize: 16 }} /></button>
+          </CCMTooltip>
+          <CCMTooltip label="Nova conversa">
+            <button onClick={() => setNovaConversaOpen(true)} aria-label="Nova conversa" style={{
+              width: 32, height: 32, borderRadius: "50%", border: 0,
+              background: c.primary, color: "#fff", cursor: "pointer",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              boxShadow: "0 2px 6px rgba(146,64,255,0.30)",
+            }}><i className="ph ph-plus" style={{ fontSize: 14 }} /></button>
+          </CCMTooltip>
         </div>
       </div>
 
@@ -286,12 +354,60 @@ const AtendimentoDetail = ({
             onFinalizeConversa={finalizeConversa}
             expanded={expanded}
             onToggleExpand={() => setExpanded(e => !e)}
+            onShowSnack={showSnack}
           />
         )}
       </div>
 
       {showTransfer && <TransferModal onClose={() => setShowTransfer(false)} />}
       {novaConversaOpen && <window.NovaConversaModal onClose={() => setNovaConversaOpen(false)} />}
+
+      {trazerConversaOpen && (
+        <TrazerConversaModal
+          currentAtendimentoId={a.id}
+          onClose={() => setTrazerConversaOpen(false)}
+          onBrought={(convId, fromAtendimentoId) => {
+            setTrazerConversaOpen(false);
+            showSnack(`Conversa ${convId} trazida do atendimento #${fromAtendimentoId} para #${a.id}`, "success");
+          }}
+          onError={(message) => {
+            setTrazerConversaOpen(false);
+            showSnack(message || "Não foi possível trazer a conversa. Tente novamente.", "error");
+          }}
+        />
+      )}
+
+      {/* Snackbar global do detalhe — sucesso/erro de vincular/trazer/etc */}
+      {snack && (
+        <div style={{
+          position: "fixed", bottom: 28, left: "50%", transform: "translateX(-50%)",
+          background: snack.type === "error" ? "#7a1f1f" : "#1f5a3a",
+          color: "#fff",
+          padding: "12px 18px 12px 14px", borderRadius: 10,
+          fontFamily: "Montserrat, sans-serif", fontSize: 13, fontWeight: 500,
+          boxShadow: "0 8px 24px rgba(40,41,61,0.32)",
+          zIndex: 10001,
+          display: "flex", alignItems: "center", gap: 10,
+          minWidth: 280, maxWidth: 480,
+          animation: "ccmFadeIn 220ms ease",
+        }}>
+          <i className={`ph-fill ${snack.type === "error" ? "ph-warning-circle" : "ph-check-circle"}`}
+            style={{ fontSize: 18, color: snack.type === "error" ? "#ffb4b4" : "#b4ffce", flexShrink: 0 }} />
+          <span style={{ flex: 1 }}>{snack.message}</span>
+          <button
+            type="button"
+            onClick={() => setSnack(null)}
+            aria-label="Fechar notificação"
+            style={{
+              border: 0, background: "transparent", color: "rgba(255,255,255,0.7)",
+              cursor: "pointer", padding: 2, fontFamily: "Montserrat, sans-serif",
+              display: "inline-flex", alignItems: "center", justifyContent: "center",
+            }}
+          >
+            <i className="ph ph-x" style={{ fontSize: 14 }} />
+          </button>
+        </div>
+      )}
 
       {alterarFilaOpen && (
         <AlterarFilaModal
@@ -394,12 +510,14 @@ const AvatarStackHeader = ({ list, maxVisible = 3 }) => {
   return (
     <div style={{ display: "flex" }}>
       {visible.map((p, i) => (
-        <span key={i} title={p.name} style={{
-          width: 26, height: 26, borderRadius: "50%",
-          background: p.bg, color: p.fg, fontSize: 9, fontWeight: 700,
-          display: "flex", alignItems: "center", justifyContent: "center",
-          border: "2px solid #fff", marginLeft: i === 0 ? 0 : -8,
-        }}>{p.initials}</span>
+        <CCMTooltip key={i} label={p.name}>
+          <span aria-label={p.name} style={{
+            width: 26, height: 26, borderRadius: "50%",
+            background: p.bg, color: p.fg, fontSize: 9, fontWeight: 700,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            border: "2px solid #fff", marginLeft: i === 0 ? 0 : -8,
+          }}>{p.initials}</span>
+        </CCMTooltip>
       ))}
       {overflow > 0 && (
         <span style={{
@@ -545,26 +663,28 @@ const RowActionPill = ({ icon, label, tooltip, onClick }) => {
   const c = window.CCM.c;
   const [hover, setHover] = React.useState(false);
   return (
-    <button
-      onClick={onClick}
-      title={tooltip}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
-      style={{
-        display: "inline-flex", alignItems: "center", gap: 4,
-        height: 26, padding: "0 10px", borderRadius: 999, border: 0,
-        background: hover ? c.primary : "#fff",
-        color: hover ? "#fff" : c.primary,
-        border: `1px solid ${c.primaryLight}`,
-        fontSize: 11, fontWeight: 600, cursor: "pointer",
-        fontFamily: "Montserrat, sans-serif",
-        whiteSpace: "nowrap",
-        transition: "background 120ms ease, color 120ms ease",
-      }}
-    >
-      <i className={`ph ${icon}`} style={{ fontSize: 13 }} />
-      {label}
-    </button>
+    <CCMTooltip label={tooltip}>
+      <button
+        onClick={onClick}
+        aria-label={tooltip}
+        onMouseEnter={() => setHover(true)}
+        onMouseLeave={() => setHover(false)}
+        style={{
+          display: "inline-flex", alignItems: "center", gap: 4,
+          height: 26, padding: "0 10px", borderRadius: 999, border: 0,
+          background: hover ? c.primary : "#fff",
+          color: hover ? "#fff" : c.primary,
+          border: `1px solid ${c.primaryLight}`,
+          fontSize: 11, fontWeight: 600, cursor: "pointer",
+          fontFamily: "Montserrat, sans-serif",
+          whiteSpace: "nowrap",
+          transition: "background 120ms ease, color 120ms ease",
+        }}
+      >
+        <i className={`ph ${icon}`} style={{ fontSize: 13 }} />
+        {label}
+      </button>
+    </CCMTooltip>
   );
 };
 
@@ -826,10 +946,14 @@ const AlterarFilaModal = ({ currentFila, queues, onClose, onConfirm }) => {
   }, [onClose]);
 
   // Flatten queues (groups + children) to a list of filas
+  // "Sem fila específica" e "Sem operação específica" não devem aparecer
+  // como opções de transferência — são buckets de itens órfãos.
   const filas = [];
   (queues || []).forEach(q => {
     if (q.children?.length) {
-      q.children.forEach(ch => filas.push({ icon: ch.icon, name: ch.name }));
+      q.children.forEach(ch => {
+        if (ch.id !== "sem-fila") filas.push({ icon: ch.icon, name: ch.name });
+      });
     } else if (q.id !== "sem-fila") {
       filas.push({ icon: q.icon, name: q.name });
     }
@@ -1170,14 +1294,16 @@ const ContatoSidePanel = ({ contact, atendimento, expanded, onToggleExpand, onCl
         borderBottom: `1px solid ${c.border}`, flexShrink: 0, background: "#fff",
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <button onClick={onToggleExpand} title={expanded ? "Recolher" : "Expandir"} style={{
-            width: 32, height: 32, borderRadius: 8, border: 0,
-            background: "transparent", color: c.fg2, cursor: "pointer",
-            display: "flex", alignItems: "center", justifyContent: "center",
-          }}
-            onMouseEnter={e => { e.currentTarget.style.background = c.borderSoft; }}
-            onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
-          ><i className={`ph ${expanded ? "ph-arrows-in-simple" : "ph-arrows-out-simple"}`} style={{ fontSize: 16 }} /></button>
+          <CCMTooltip label={expanded ? "Recolher" : "Expandir"}>
+            <button onClick={onToggleExpand} aria-label={expanded ? "Recolher" : "Expandir"} style={{
+              width: 32, height: 32, borderRadius: 8, border: 0,
+              background: "transparent", color: c.fg2, cursor: "pointer",
+              display: "flex", alignItems: "center", justifyContent: "center",
+            }}
+              onMouseEnter={e => { e.currentTarget.style.background = c.borderSoft; }}
+              onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
+            ><i className={`ph ${expanded ? "ph-arrows-in-simple" : "ph-arrows-out-simple"}`} style={{ fontSize: 16 }} /></button>
+          </CCMTooltip>
           <span style={{
             width: 32, height: 32, borderRadius: "50%",
             background: contact.bg, color: contact.fg,
@@ -1217,11 +1343,13 @@ const ContatoSidePanel = ({ contact, atendimento, expanded, onToggleExpand, onCl
           <Section title="Horários favoritos" icon="ph-clock">
             <div style={{ display: "flex", alignItems: "flex-end", gap: 3, height: 110, marginTop: 6 }}>
               {horarios.map((v, i) => (
-                <div key={i} title={`${i}h: ${v}`} style={{
-                  flex: 1, height: `${(v / maxH) * 100}%`, minHeight: 2,
-                  background: v > 0 ? "#3a8fb9" : "#e5e9f0",
-                  borderRadius: "3px 3px 0 0",
-                }} />
+                <CCMTooltip key={i} label={`${i}h: ${v}`}>
+                  <div aria-label={`${i}h: ${v}`} style={{
+                    flex: 1, height: `${(v / maxH) * 100}%`, minHeight: 2,
+                    background: v > 0 ? "#3a8fb9" : "#e5e9f0",
+                    borderRadius: "3px 3px 0 0",
+                  }} />
+                </CCMTooltip>
               ))}
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4, fontSize: 9, color: c.fg3 }}>
@@ -1386,4 +1514,486 @@ const DonutLegend = ({ value, total, label, itens }) => {
   );
 };
 
-Object.assign(window, { AtendimentoDetail });
+// ─────────────────────────────────────────────────────────────────────────
+// TrazerConversaModal — operação inversa do LinkConversaModal.
+// ---------------------------------------------------------------------
+// Em um atendimento, permite buscar UMA conversa que está em outro
+// atendimento e movê-la pra cá. Busca multi-atributo: ID da conversa,
+// ID do atendimento de origem, contato, atendente.
+//
+// DE-PARA Angular: TicketImportConversationModalComponent
+//   PATCH /conversas/:convId { atendimento_id: currentAtendimentoId }
+// ─────────────────────────────────────────────────────────────────────────
+const TRAZER_FILTERS = [
+  { id: "conversa",    label: "Conversa",         icon: "ph-chats-circle" },
+  { id: "atendimento", label: "Atendimento",      icon: "ph-tag" },
+  { id: "contato",     label: "Dados do contato", icon: "ph-address-book" },
+  { id: "atendente",   label: "Atendente",        icon: "ph-user" },
+];
+
+const TrazerConversaModal = ({ currentAtendimentoId, onClose, onBrought, onError }) => {
+  const c = window.CCM.c;
+  const D = window.CCM_DATA;
+  const [query, setQuery] = React.useState("");
+  const [filters, setFilters] = React.useState([]);
+  // Preview read-only — abre o atendimento de origem já na conversa procurada,
+  // sem botões de ação pra evitar loop infinito.
+  const [preview, setPreview] = React.useState(null); // { atendimentoId, convId }
+
+  React.useEffect(() => {
+    const onKey = (e) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  const norm = (s) => (s || "").toLowerCase();
+  const digits = (s) => (s || "").replace(/\D+/g, "");
+  const q = query.trim();
+  const qn = norm(q);
+  const qd = digits(q);
+  const has = (f) => filters.length === 0 || filters.includes(f);
+
+  // Acha conversas em OUTROS atendimentos que casem com a busca.
+  const results = React.useMemo(() => {
+    if (!q) return [];
+    const out = [];
+    for (const at of D.atendimentos || []) {
+      if (at.id === currentAtendimentoId) continue;
+      const contact = at.contatos?.[0];
+      if (!contact) continue;
+      for (const cv of at.conversas || []) {
+        let match = false;
+        if (has("conversa") && qn && norm(String(cv.id)).includes(qn)) match = true;
+        if (has("atendimento") && qd && at.id.includes(qd)) match = true;
+        if (has("contato")) {
+          if (qn && norm(contact.name).includes(qn)) match = true;
+          if (qn && norm(contact.email).includes(qn)) match = true;
+          if (qd && digits(contact.phone).includes(qd)) match = true;
+          if (qd && digits(contact.cpf).includes(qd)) match = true;
+        }
+        if (has("atendente")) {
+          if ((at.atendentes || []).some(a => qn && norm(a.name).includes(qn))) match = true;
+        }
+        if (match) out.push({ conv: cv, atendimento: at, contact });
+        if (out.length >= 30) break;
+      }
+      if (out.length >= 30) break;
+    }
+    return out;
+  }, [q, qn, qd, filters, D.atendimentos, currentAtendimentoId]);
+
+  const toggleFilter = (fid) => {
+    setFilters(prev => prev.includes(fid) ? prev.filter(x => x !== fid) : [...prev, fid]);
+  };
+
+  return ReactDOM.createPortal(
+    <div onClick={onClose} style={{
+      position: "fixed", inset: 0, background: "rgba(40,41,61,0.5)",
+      display: "flex", alignItems: "flex-start", justifyContent: "center",
+      padding: "60px 16px", overflowY: "auto", zIndex: 9999,
+      fontFamily: "Montserrat, sans-serif",
+    }}>
+      <div onClick={e => e.stopPropagation()} style={{
+        background: "#fff", borderRadius: 16, width: "100%", maxWidth: 560,
+        boxShadow: "0 20px 50px rgba(40,41,61,0.30)",
+        display: "flex", flexDirection: "column", maxHeight: "calc(100vh - 120px)",
+        overflow: "hidden",
+      }}>
+        {/* Header */}
+        <div style={{
+          display: "flex", alignItems: "center", gap: 10,
+          padding: "16px 20px", borderBottom: `1px solid ${c.border}`,
+        }}>
+          <i className="ph ph-tray-arrow-down" style={{ fontSize: 18, color: c.primary }} />
+          <span style={{ fontSize: 14, fontWeight: 700, color: c.fg1, flex: 1 }}>
+            Trazer conversa para <span style={{ color: c.primary }}>#{currentAtendimentoId}</span>
+          </span>
+          <CCMTooltip label="Fechar">
+            <button onClick={onClose} aria-label="Fechar" style={{
+              width: 28, height: 28, border: 0, background: "transparent",
+              cursor: "pointer", color: c.fg2, borderRadius: 6,
+              display: "flex", alignItems: "center", justifyContent: "center",
+            }}><i className="ph ph-x" style={{ fontSize: 14 }} /></button>
+          </CCMTooltip>
+        </div>
+
+        {/* Body */}
+        <div style={{ padding: 20, flex: 1, overflowY: "auto", minHeight: 0 }}>
+          <p style={{ margin: "0 0 14px", fontSize: 13, color: c.fg2, lineHeight: 1.5 }}>
+            Busque a conversa que deseja trazer pra este atendimento. A conversa
+            será <strong>desvinculada</strong> do atendimento de origem.
+          </p>
+
+          {/* Search input */}
+          <div style={{
+            display: "flex", alignItems: "center", gap: 10,
+            border: `1.5px solid ${filters.length > 0 ? c.primary : c.border}`,
+            borderRadius: 12, padding: "11px 14px", marginBottom: 14,
+            transition: "border-color 150ms ease",
+          }}>
+            <i className="ph ph-magnifying-glass" style={{ fontSize: 16, color: c.fg3 }} />
+            <input
+              autoFocus
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+              placeholder="Buscar conversa por ID, contato, atendente…"
+              style={{
+                flex: 1, border: 0, outline: "none",
+                fontFamily: "Montserrat, sans-serif",
+                fontSize: 13, color: c.fg1, background: "transparent",
+              }}
+            />
+            {query && (
+              <i className="ph ph-x"
+                onClick={() => setQuery("")}
+                style={{ fontSize: 14, color: c.fg3, cursor: "pointer" }} />
+            )}
+          </div>
+
+          {/* Filter chips */}
+          <div style={{ fontSize: 11, color: c.fg2, marginBottom: 6 }}>
+            Buscar em (deixe vazio pra buscar em todos os campos):
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 14 }}>
+            {TRAZER_FILTERS.map(f => {
+              const active = filters.includes(f.id);
+              return (
+                <button
+                  key={f.id}
+                  type="button"
+                  onClick={() => toggleFilter(f.id)}
+                  style={{
+                    display: "inline-flex", alignItems: "center", gap: 6,
+                    height: 28, padding: "0 12px", borderRadius: 999,
+                    border: `1px solid ${active ? c.primary : c.border}`,
+                    background: active ? c.primaryLightest : "#fff",
+                    color: active ? c.primary : c.fg2,
+                    fontSize: 12, fontWeight: 600, cursor: "pointer",
+                    fontFamily: "Montserrat, sans-serif",
+                  }}
+                >
+                  <i className={`ph ${f.icon}`} style={{ fontSize: 13 }} />
+                  {f.label}
+                  {active && <i className="ph ph-check" style={{ fontSize: 11, marginLeft: 2 }} />}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Results */}
+          {!q && (
+            <div style={{ padding: "20px 12px", textAlign: "center", color: c.fg3, fontSize: 12, lineHeight: 1.5 }}>
+              Digite acima pra começar a buscar conversas.
+            </div>
+          )}
+          {q && results.length === 0 && (
+            <div style={{ padding: "20px 12px", textAlign: "center", color: c.fg3, fontSize: 12, lineHeight: 1.5 }}>
+              Nenhuma conversa encontrada para <strong style={{ color: c.fg2 }}>"{q}"</strong>.
+            </div>
+          )}
+          {q && results.length > 0 && (
+            <React.Fragment>
+              <div style={{ fontSize: 11, color: c.fg2, marginBottom: 8, fontWeight: 600 }}>
+                {results.length} {results.length === 1 ? "conversa encontrada" : "conversas encontradas"}
+              </div>
+              {results.map(({ conv, atendimento, contact }) => (
+                <div key={`${atendimento.id}-${conv.id}`} style={{
+                  display: "flex", alignItems: "center", gap: 12,
+                  padding: "10px 12px", borderRadius: 10,
+                  background: "#fff", border: `1px solid ${c.border}`,
+                  marginBottom: 6,
+                }}>
+                  <span style={{
+                    width: 32, height: 32, borderRadius: "50%", flexShrink: 0,
+                    background: contact.bg, color: contact.fg,
+                    fontSize: 11, fontWeight: 700,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                  }}>{contact.initials}</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: c.fg1, display: "flex", gap: 8, alignItems: "center" }}>
+                      Conversa {conv.id}
+                      <span style={{
+                        background: c.primaryLightest, color: c.primary,
+                        fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 999,
+                      }}>em #{atendimento.id}</span>
+                    </div>
+                    <div style={{ fontSize: 11, color: c.fg2, marginTop: 2,
+                      overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {contact.name} · {conv.fila || atendimento.tipo || "—"}
+                    </div>
+                  </div>
+                  <CCMTooltip label="Visualizar conversa (somente leitura)">
+                    <button
+                      type="button"
+                      onClick={() => setPreview({ atendimentoId: atendimento.id, convId: conv.id })}
+                      aria-label="Visualizar conversa"
+                      style={{
+                        width: 30, height: 30, border: `1px solid ${c.border}`,
+                        background: "#fff", color: c.fg2, borderRadius: 8,
+                        cursor: "pointer", flexShrink: 0,
+                        display: "inline-flex", alignItems: "center", justifyContent: "center",
+                        fontFamily: "Montserrat, sans-serif",
+                        transition: "background 120ms ease, color 120ms ease, border-color 120ms ease",
+                      }}
+                      onMouseEnter={e => { e.currentTarget.style.background = c.primaryLightest; e.currentTarget.style.color = c.primary; e.currentTarget.style.borderColor = c.primary; }}
+                      onMouseLeave={e => { e.currentTarget.style.background = "#fff"; e.currentTarget.style.color = c.fg2; e.currentTarget.style.borderColor = c.border; }}
+                    >
+                      <i className="ph ph-eye" style={{ fontSize: 14 }} />
+                    </button>
+                  </CCMTooltip>
+                  <button
+                    type="button"
+                    onClick={() => onBrought?.(conv.id, atendimento.id)}
+                    style={{
+                      border: 0, background: c.primary, color: "#fff",
+                      padding: "0 12px", height: 30, borderRadius: 8,
+                      fontFamily: "Montserrat, sans-serif",
+                      fontSize: 12, fontWeight: 600, cursor: "pointer",
+                      display: "inline-flex", alignItems: "center", gap: 4,
+                    }}
+                  >
+                    Trazer <i className="ph ph-arrow-down" style={{ fontSize: 12 }} />
+                  </button>
+                </div>
+              ))}
+            </React.Fragment>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div style={{
+          padding: "12px 20px", borderTop: `1px solid ${c.border}`,
+          display: "flex", justifyContent: "flex-end", gap: 8,
+        }}>
+          <button onClick={onClose} style={{
+            padding: "0 18px", height: 36, borderRadius: 10, border: `1px solid ${c.border}`,
+            background: "#fff", color: c.fg1, fontWeight: 600, cursor: "pointer",
+            fontFamily: "Montserrat, sans-serif", fontSize: 13,
+          }}>Cancelar</button>
+        </div>
+      </div>
+
+      {preview && (
+        <AtendimentoPreview
+          atendimentoId={preview.atendimentoId}
+          initialConvId={preview.convId}
+          onClose={() => setPreview(null)}
+        />
+      )}
+    </div>,
+    document.body
+  );
+};
+
+// ─────────────────────────────────────────────────────────────────────────
+// AtendimentoPreview — leitor read-only de um atendimento
+// ---------------------------------------------------------------------
+// Usado pelos modais Link/Trazer pra dar uma olhada num atendimento ANTES
+// de vincular/trazer a conversa, sem permitir nenhuma ação que cause
+// looping infinito (sem vincular, sem transferir, sem nova conversa,
+// sem marcadores, sem composer). Só mostra:
+//   • Lista de conversas do atendimento (sidebar)
+//   • Thread da conversa selecionada (read-only)
+//   • Header com #ID e badge "Somente leitura"
+//
+// DE-PARA Angular: ChatPreviewReadonlyComponent <app-chat-preview-readonly>
+//   GET /atendimentos/:id (mesmo endpoint do detalhe normal, mas todos
+//   os botões de ação são suprimidos via [readonly]="true" inputs).
+// ─────────────────────────────────────────────────────────────────────────
+const AtendimentoPreview = ({ atendimentoId, initialConvId, onClose }) => {
+  const c = window.CCM.c;
+  const D = window.CCM_DATA;
+  const a = D.atendimentos.find(x => x.id === atendimentoId);
+
+  React.useEffect(() => {
+    const onKey = (e) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  const conversas = (a && a.conversas) || [];
+  const initialIdx = React.useMemo(() => {
+    if (initialConvId) {
+      const idx = conversas.findIndex(cv => String(cv.id) === String(initialConvId));
+      if (idx >= 0) return idx;
+    }
+    return 0;
+  }, [initialConvId, conversas]);
+  const [openIdx, setOpenIdx] = React.useState(initialIdx);
+  React.useEffect(() => { setOpenIdx(initialIdx); }, [initialIdx]);
+
+  if (!a) return null;
+  const openConv = conversas[openIdx];
+  const contact = a.contatos?.[0];
+  const attendant = a.atendentes?.[0] || D.attendant;
+
+  return ReactDOM.createPortal(
+    <div onClick={onClose} style={{
+      position: "fixed", inset: 0, zIndex: 10003,
+      background: "rgba(40,41,61,0.55)",
+      display: "flex", alignItems: "stretch", justifyContent: "center",
+      padding: "32px 16px",
+      fontFamily: "Montserrat, sans-serif",
+    }}>
+      <div onClick={e => e.stopPropagation()} style={{
+        background: "#fff", borderRadius: 16, width: "100%",
+        maxWidth: 1100,
+        boxShadow: "0 20px 50px rgba(40,41,61,0.40)",
+        display: "flex", flexDirection: "column", overflow: "hidden",
+      }}>
+        {/* Header */}
+        <div style={{
+          height: 56, padding: "0 20px",
+          display: "flex", alignItems: "center", gap: 10,
+          borderBottom: `1px solid ${c.border}`,
+          background: "#fff", flexShrink: 0,
+        }}>
+          <i className="ph ph-eye" style={{ fontSize: 18, color: c.primary }} />
+          <span style={{ fontSize: 14, fontWeight: 700, color: c.fg1 }}>
+            Atendimento <span style={{ color: c.primary }}>#{atendimentoId}</span>
+          </span>
+          {a.tipo && (
+            <span style={{ fontSize: 12, color: c.fg2 }}>· {a.tipo}</span>
+          )}
+          <span style={{
+            background: c.borderSoft, color: c.fg2,
+            fontSize: 9, fontWeight: 700, padding: "3px 10px", borderRadius: 999,
+            textTransform: "uppercase", letterSpacing: "0.04em",
+            marginLeft: 4,
+          }}>Somente leitura</span>
+          <div style={{ flex: 1 }} />
+          <CCMTooltip label="Fechar">
+            <button onClick={onClose} aria-label="Fechar preview" style={{
+              width: 32, height: 32, border: 0, background: "transparent",
+              cursor: "pointer", color: c.fg2, borderRadius: 6,
+              display: "flex", alignItems: "center", justifyContent: "center",
+            }}><i className="ph ph-x" style={{ fontSize: 16 }} /></button>
+          </CCMTooltip>
+        </div>
+
+        {/* Body */}
+        <div style={{ flex: 1, display: "flex", overflow: "hidden", minHeight: 0 }}>
+          {/* Sidebar — lista de conversas, sem botões de ação */}
+          <div style={{
+            width: 280, flexShrink: 0,
+            borderRight: `1px solid ${c.border}`,
+            overflowY: "auto", background: c.canvas,
+          }}>
+            <div style={{
+              padding: "12px 16px 8px", fontSize: 10, fontWeight: 700, color: c.fg3,
+              textTransform: "uppercase", letterSpacing: "0.06em",
+            }}>
+              Conversas ({conversas.length})
+            </div>
+            {conversas.length === 0 && (
+              <div style={{ padding: "12px 16px", fontSize: 12, color: c.fg3 }}>
+                Nenhuma conversa.
+              </div>
+            )}
+            {conversas.map((cv, idx) => {
+              const selected = idx === openIdx;
+              return (
+                <button
+                  key={cv.id}
+                  type="button"
+                  onClick={() => setOpenIdx(idx)}
+                  style={{
+                    display: "flex", flexDirection: "column", gap: 4,
+                    width: "100%", textAlign: "left", border: 0,
+                    padding: "10px 16px", cursor: "pointer",
+                    background: selected ? c.primaryLightest : "transparent",
+                    borderLeft: `3px solid ${selected ? c.primary : "transparent"}`,
+                    fontFamily: "Montserrat, sans-serif",
+                  }}
+                  onMouseEnter={e => { if (!selected) e.currentTarget.style.background = "#fff"; }}
+                  onMouseLeave={e => { if (!selected) e.currentTarget.style.background = "transparent"; }}
+                >
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 600, color: selected ? c.primary : c.fg1 }}>
+                    <i className="ph ph-chats-circle" style={{ fontSize: 13, opacity: 0.7 }} />
+                    {cv.id}
+                  </span>
+                  <span style={{ fontSize: 11, color: c.fg2,
+                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {cv.fila || "—"} · {cv.status || "—"}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Thread */}
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
+            {/* Sub-header — só info, sem ações */}
+            <div style={{
+              height: 56, padding: "0 20px",
+              display: "flex", alignItems: "center", gap: 8,
+              borderBottom: `1px solid ${c.border}`, background: "#fff", flexShrink: 0,
+            }}>
+              <i className="ph ph-chats-circle" style={{ fontSize: 16, color: c.fg2 }} />
+              <span style={{ fontSize: 13, fontWeight: 600, color: c.fg1 }}>
+                {openConv?.id || "—"}
+              </span>
+              {openConv?.status && (
+                <span style={{
+                  background: c.borderSoft, color: c.fg2,
+                  fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 999,
+                }}>{openConv.status}</span>
+              )}
+              {contact && (
+                <span style={{ fontSize: 12, color: c.fg2, marginLeft: "auto" }}>
+                  <i className="ph ph-user" style={{ fontSize: 12, marginRight: 4 }} />
+                  {contact.name}
+                </span>
+              )}
+            </div>
+
+            {/* Mensagens — reusa MessageBubble/DayChip do ConversaPanel */}
+            <div style={{
+              flex: 1, overflowY: "auto",
+              padding: "20px 32px",
+              backgroundImage: "url('design-system/assets/backgrounds/bg-chat.svg')",
+              backgroundColor: "#FAF6EE",
+              backgroundRepeat: "repeat",
+              display: "flex", flexDirection: "column", gap: 14,
+            }}>
+              {openConv ? (
+                <React.Fragment>
+                  {window.DayChip && <window.DayChip text="Hoje" />}
+                  {(openConv.messages || []).map(m => (
+                    window.MessageBubble
+                      ? <window.MessageBubble key={m.id} msg={m} contact={contact} attendant={attendant} />
+                      : <div key={m.id} style={{ fontSize: 12, color: c.fg2 }}>{m.text}</div>
+                  ))}
+                  {(!openConv.messages || openConv.messages.length === 0) && (
+                    <div style={{ textAlign: "center", color: c.fg3, fontSize: 12, marginTop: 40 }}>
+                      Nenhuma mensagem nesta conversa.
+                    </div>
+                  )}
+                </React.Fragment>
+              ) : (
+                <div style={{ textAlign: "center", color: c.fg3, fontSize: 12, marginTop: 40 }}>
+                  Selecione uma conversa na barra lateral.
+                </div>
+              )}
+            </div>
+
+            {/* Footer read-only (substitui o Composer) */}
+            <div style={{
+              padding: "12px 20px", display: "flex", alignItems: "center", gap: 10,
+              background: c.canvas, borderTop: `1px solid ${c.border}`,
+              color: c.fg2, fontSize: 12, flexShrink: 0,
+            }}>
+              <i className="ph ph-lock-key" style={{ fontSize: 14, color: c.primary }} />
+              <span>
+                Visualização somente leitura — sem opções de transferir, vincular, marcar ou enviar.
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+};
+
+Object.assign(window, { AtendimentoDetail, TrazerConversaModal, AtendimentoPreview });

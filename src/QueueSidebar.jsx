@@ -1,4 +1,28 @@
 // QueueSidebar.jsx — Atendimentos panel (left) + queues tree + search
+// =====================================================================
+// DE-PARA REACT → ANGULAR  ·  QueueSidebar.jsx
+// ---------------------------------------------------------------------
+// Sidebar esquerda da visão "Atendimentos" (árvore de filas + busca + escopo).
+// Módulo Angular: @modules/chat-one-to-one  (rota /atendimentos).
+//
+//   QueueSidebar       → TicketsDashSidebarComponent  <app-tickets-dash-sidebar>
+//                        @modules/chat-one-to-one/components/tickets-dash-sidebar/
+//   QueuesTree/QueueRow→ árvore de filas/operações DENTRO do tickets-dash-sidebar
+//                        (no Angular as filas vêm do módulo @modules/operation)
+//   ScopeToggle        → segmented "Meus/Todos/Favoritos/SLA": no Angular fica no
+//                        header do tickets-dash-sidebar (mat-button-toggle / chips)
+//   SearchPopup        → busca global de atendimentos/contatos. Equivalente:
+//                        TicketsDashTable usa filtros; busca de conversas =
+//                        ChatTalksListComponent <app-chat-talks-list> +
+//                        talks-list-filter-menu / talks-list-sort-filter
+//   SearchResultRow /
+//   ContactResultRow   → linhas de resultado (usar AvatarComponent <ccm-avatar>
+//                        + chips .ccm-chips). Badge de contagem verde = .ccm-badget.success
+//   ResizeHandle       → splitter (no Angular: angular-split / CDK drag) — sem 1:1
+// OBS: a visão "Conversas" (tab irmã) usa ChatSidebarComponent <app-chat-sidebar>
+//      + ChatFoldersListComponent <app-chat-folders-list>.
+// Doc: de-para/02-componentes.md
+// =====================================================================
 const QUEUE_SIDEBAR_MIN = 240;
 const QUEUE_SIDEBAR_MAX = 480;
 const QUEUE_SIDEBAR_DEFAULT = 340;
@@ -13,7 +37,7 @@ const QueueSidebar = ({
   const favoritesOnly = viewScope === "favorites";
   const c = window.CCM.c;
   const D = window.CCM_DATA;
-  const [expanded, setExpanded] = React.useState({ "operacao-suporte": true });
+  const [expanded, setExpanded] = React.useState({ "sem-operacao": true, "operacao-suporte": true });
   const [searchOpen, setSearchOpen] = React.useState(false);
   const searchBtnRef = React.useRef(null);
   const asideRef = React.useRef(null);
@@ -396,7 +420,7 @@ const ResizeHandle = ({ onStart, onDoubleClick, hover, resizing, setHover, color
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       onDoubleClick={onDoubleClick}
-      title="Arrastar para redimensionar"
+      aria-label="Arrastar para redimensionar — duplo-clique para redefinir"
       style={{
         position: "absolute",
         top: 0, right: -3, bottom: 0,
@@ -732,6 +756,42 @@ const SearchResultsContent = ({ query, activeFilters = [], contatoFields = [], o
   const qNorm = normalize(q);
   const qDigits = digitsOnly(q);
 
+  // ── Máquina de fases de carregamento ──────────────────────────────────
+  // Simula o caso real onde o backend pode demorar pra responder e onde
+  // o primeiro round vem com os "últimos 30 dias" (subset pequeno),
+  // depois o histórico completo chega e a paginação aparece.
+  //
+  //   initial-loading  → skeleton rows enquanto não veio nada
+  //   recent           → mostra o subset (RECENT_SUBSET_SIZE itens)
+  //   loading-more     → recent + spinner "buscando no histórico completo"
+  //   full             → página completa + paginação
+  //
+  // No Angular: substituir os timeouts por chamadas reais a 2 endpoints
+  // (ou 1 endpoint com parâmetro `period=last30`, depois `period=all`).
+  const [phase, setPhase] = React.useState("initial-loading");
+  const [page, setPage] = React.useState(1);
+  // Filtro "atendimentos deste contato" — acionado pelo funil no card de contato.
+  // Quando setado, restringe a lista de atendimentos ao contact.id selecionado.
+  const [contactFilterId, setContactFilterId] = React.useState(null);
+
+  // Recarrega ao mudar query OU filtros (chips de atributo / sub-campos)
+  const reloadKey = q + "|" + activeFilters.join(",") + "|" + contatoFields.join(",");
+  React.useEffect(() => {
+    setPhase("initial-loading");
+    setPage(1);
+    setContactFilterId(null); // limpa o filtro de contato em qualquer mudança de busca
+    const t1 = setTimeout(() => setPhase("recent"),       SEARCH_SKELETON_MS);
+    const t2 = setTimeout(() => setPhase("loading-more"), SEARCH_SKELETON_MS + SEARCH_RECENT_MS);
+    const t3 = setTimeout(() => setPhase("full"),         SEARCH_FULL_MS);
+    return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); };
+  }, [reloadKey]);
+
+  // Aplicar/limpar filtro por contato sempre reseta pra página 1.
+  const applyContactFilter = React.useCallback((id) => {
+    setContactFilterId(prev => prev === id ? null : id); // clica de novo no mesmo → limpa
+    setPage(1);
+  }, []);
+
   // Sem filtros ativos: busca em TUDO. Com filtros: só nos campos selecionados.
   const has = (f) => activeFilters.length === 0 || activeFilters.includes(f);
 
@@ -761,7 +821,7 @@ const SearchResultsContent = ({ query, activeFilters = [], contatoFields = [], o
     : [];
 
   const matchedConvByAt = {};
-  const results = (D.atendimentos || []).filter(at => {
+  const allResults = (D.atendimentos || []).filter(at => {
     const contact = at.contatos?.[0];
     if (!contact) return false;
 
@@ -796,22 +856,91 @@ const SearchResultsContent = ({ query, activeFilters = [], contatoFields = [], o
     return false;
   });
 
-  const noHits = results.length === 0 && contactResults.length === 0;
+  // Se houver filtro de contato ativo, restringe os atendimentos àquele id.
+  // contactResults segue mostrando todos os contatos casados pela query (com
+  // o card filtrado em destaque), pra dar contexto e permitir trocar de contato.
+  const filteredResults = contactFilterId
+    ? allResults.filter(at => at.contatos?.[0]?.id === contactFilterId)
+    : allResults;
 
-  const summaryParts = [];
-  if (contactResults.length > 0)
-    summaryParts.push(`${contactResults.length} ${contactResults.length === 1 ? "contato" : "contatos"}`);
-  if (results.length > 0)
-    summaryParts.push(`${results.length} ${results.length === 1 ? "atendimento" : "atendimentos"}`);
+  const filteredContact = contactFilterId
+    ? (contactResults.find(ct => ct.id === contactFilterId)
+       || (D.contacts && D.contacts[contactFilterId])
+       || null)
+    : null;
+
+  const totalResults = filteredResults.length;
+  const totalPages = Math.max(1, Math.ceil(totalResults / SEARCH_PAGE_SIZE));
+
+  // Subset "últimos 30 dias" — demo simula que o backend devolveu só os
+  // RECENT_SUBSET_SIZE primeiros itens no 1º round.
+  const recentResults = filteredResults.slice(0, Math.min(RECENT_SUBSET_SIZE, totalResults));
+  const hasMoreToLoad = totalResults > recentResults.length;
+
+  // Derivações de UI a partir da fase atual
+  const isSearching   = phase === "initial-loading";
+  const isRecentPhase = phase === "recent" || phase === "loading-more";
+  const isFinal       = phase === "full";
+  const showSkeletons    = isSearching;
+  const showLoadingMore  = phase === "loading-more" && hasMoreToLoad;
+  const showPagination   = isFinal && totalPages > 1;
+
+  let visibleAtendimentos;
+  if (isSearching) {
+    visibleAtendimentos = [];
+  } else if (isRecentPhase) {
+    visibleAtendimentos = recentResults;
+  } else {
+    const start = (page - 1) * SEARCH_PAGE_SIZE;
+    visibleAtendimentos = filteredResults.slice(start, start + SEARCH_PAGE_SIZE);
+  }
+
+  const noHits = isFinal && totalResults === 0 && contactResults.length === 0;
+
+  // Resumo (header) — muda conforme a fase
+  const renderSummary = () => {
+    if (isSearching) {
+      return (
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+          <i className="ph ph-circle-notch ccm-spin" style={{ fontSize: 12, color: c.primary }} />
+          Buscando "{q}"…
+        </span>
+      );
+    }
+    if (noHits) return "Nenhum resultado encontrado";
+    const parts = [];
+    if (contactResults.length > 0)
+      parts.push(`${contactResults.length} ${contactResults.length === 1 ? "contato" : "contatos"}`);
+    if (totalResults > 0) {
+      if (isRecentPhase) {
+        parts.push(`${recentResults.length} de ${totalResults} atendimentos (últimos 30 dias)`);
+      } else {
+        parts.push(`${totalResults} ${totalResults === 1 ? "atendimento" : "atendimentos"}`);
+      }
+    }
+    return parts.join(" · ");
+  };
 
   return (
     <React.Fragment>
+      {/* keyframes locais para o skeleton e o spinner */}
+      <style>{`
+        @keyframes ccm-shimmer-anim { 0% { background-position: -300px 0; } 100% { background-position: 300px 0; } }
+        .ccm-shimmer {
+          background: linear-gradient(90deg, ${c.borderSoft} 0%, ${c.border} 50%, ${c.borderSoft} 100%);
+          background-size: 600px 100%;
+          animation: ccm-shimmer-anim 1.2s linear infinite;
+        }
+        @keyframes ccm-spin-anim { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        .ccm-spin { display: inline-block; animation: ccm-spin-anim 0.9s linear infinite; }
+      `}</style>
+
       <div style={{
         display: "flex", alignItems: "center", justifyContent: "space-between",
-        marginBottom: 10,
+        marginBottom: 10, gap: 8,
       }}>
         <div style={{ fontSize: 12, fontWeight: 600, color: c.fg2 }}>
-          {noHits ? "Nenhum resultado encontrado" : summaryParts.join(" · ")}
+          {renderSummary()}
         </div>
         {activeFilters.length > 0 && (
           <div style={{ fontSize: 11, color: c.fg3 }}>
@@ -835,8 +964,56 @@ const SearchResultsContent = ({ query, activeFilters = [], contatoFields = [], o
         </div>
       )}
 
+      {/* ── Banner do filtro de contato ── */}
+      {contactFilterId && filteredContact && !showSkeletons && (
+        <div style={{
+          display: "flex", alignItems: "center", gap: 8,
+          padding: "8px 12px", marginBottom: 12,
+          background: c.primaryLightest,
+          border: `1px solid ${c.primary}`,
+          borderRadius: 10,
+          fontSize: 12, color: c.primary, fontWeight: 600,
+        }}>
+          <i className="ph-fill ph-funnel-simple" style={{ fontSize: 14 }} />
+          <span style={{ flex: 1, minWidth: 0 }}>
+            Filtrando atendimentos de <strong>{filteredContact.name}</strong>
+            {totalResults > 0 && (
+              <span style={{ color: c.fg3, fontWeight: 500, marginLeft: 6 }}>
+                ({totalResults} {totalResults === 1 ? "resultado" : "resultados"})
+              </span>
+            )}
+          </span>
+          <CCMTooltip label="Limpar filtro de contato">
+            <button
+              type="button"
+              onClick={() => applyContactFilter(contactFilterId)}
+              aria-label="Limpar filtro de contato"
+              style={{
+                width: 24, height: 24, borderRadius: 6, border: 0,
+                background: "transparent", color: c.primary,
+                cursor: "pointer", flexShrink: 0,
+                display: "inline-flex", alignItems: "center", justifyContent: "center",
+                fontFamily: "Montserrat, sans-serif",
+              }}
+            >
+              <i className="ph ph-x" style={{ fontSize: 14 }} />
+            </button>
+          </CCMTooltip>
+        </div>
+      )}
+
+      {/* ── Skeleton durante busca inicial ── */}
+      {showSkeletons && (
+        <React.Fragment>
+          <SectionLabel icon="ph-address-book" label="Contatos" count="…" />
+          {[0, 1].map(i => <SearchSkeletonRow key={`sk-c-${i}`} tone="contact" />)}
+          <SectionLabel icon="ph-tag" label="Atendimentos" count="…" style={{ marginTop: 14 }} />
+          {[0, 1, 2].map(i => <SearchSkeletonRow key={`sk-a-${i}`} tone="atendimento" />)}
+        </React.Fragment>
+      )}
+
       {/* ── Seção: Contatos ── */}
-      {contactResults.length > 0 && (
+      {!showSkeletons && contactResults.length > 0 && (
         <React.Fragment>
           <SectionLabel
             icon="ph-address-book"
@@ -849,23 +1026,24 @@ const SearchResultsContent = ({ query, activeFilters = [], contatoFields = [], o
               contact={ct}
               query={q}
               onOpen={() => onOpenContact && onOpenContact(ct.id)}
+              onFilterByContact={applyContactFilter}
+              isFilterActive={contactFilterId === ct.id}
             />
           ))}
         </React.Fragment>
       )}
 
       {/* ── Seção: Atendimentos ── */}
-      {results.length > 0 && (
+      {!showSkeletons && totalResults > 0 && (
         <React.Fragment>
-          {contactResults.length > 0 && (
-            <SectionLabel
-              icon="ph-tag"
-              label="Atendimentos"
-              count={results.length}
-              style={{ marginTop: 14 }}
-            />
-          )}
-          {results.slice(0, 12).map(at => {
+          <SectionLabel
+            icon="ph-tag"
+            label="Atendimentos"
+            count={totalResults}
+            hint={isRecentPhase ? "últimos 30 dias" : undefined}
+            style={{ marginTop: contactResults.length > 0 ? 14 : 0 }}
+          />
+          {visibleAtendimentos.map(at => {
             const contact = at.contatos[0];
             const status = at.status || "Aberto";
             const statusColor = STATUS_COLORS[status] || { bg: "#EEEFF3", fg: "#52555f" };
@@ -882,13 +1060,27 @@ const SearchResultsContent = ({ query, activeFilters = [], contatoFields = [], o
               />
             );
           })}
+          {showLoadingMore && (
+            <LoadingMoreInline
+              label={`Buscando no histórico completo (${recentResults.length} de ${totalResults})…`}
+            />
+          )}
+          {showPagination && (
+            <SearchPagination
+              page={page}
+              totalPages={totalPages}
+              total={totalResults}
+              pageSize={SEARCH_PAGE_SIZE}
+              onChange={setPage}
+            />
+          )}
         </React.Fragment>
       )}
     </React.Fragment>
   );
 };
 
-const SectionLabel = ({ icon, label, count, style = {} }) => {
+const SectionLabel = ({ icon, label, count, hint, style = {} }) => {
   const c = window.CCM.c;
   return (
     <div style={{
@@ -904,13 +1096,158 @@ const SectionLabel = ({ icon, label, count, style = {} }) => {
         padding: "1px 7px", borderRadius: 999,
         fontSize: 10, fontWeight: 700, letterSpacing: 0,
       }}>{count}</span>
+      {hint && (
+        <span style={{
+          display: "inline-flex", alignItems: "center", gap: 3,
+          background: c.primaryLightest, color: c.primary,
+          padding: "1px 7px", borderRadius: 999,
+          fontSize: 9, fontWeight: 700, letterSpacing: 0,
+          textTransform: "none",
+        }}>
+          <i className="ph ph-calendar-blank" style={{ fontSize: 10 }} />
+          {hint}
+        </span>
+      )}
     </div>
   );
 };
 
-const ContactResultRow = ({ contact, query, onOpen }) => {
+// ─────────────────────────────────────────────────────────────────────────
+// Loading + paginação da busca
+// ─────────────────────────────────────────────────────────────────────────
+// SEARCH_PAGE_SIZE — itens por página em "Atendimentos"
+// RECENT_SUBSET_SIZE — quantos itens o backend devolve no 1º round
+//   (últimos 30 dias). No demo é fixo em 3 pra ilustrar o caso
+//   "carregou só 3, falta completar a página". No Angular, isso vem do
+//   endpoint paginado com filtro de período padrão.
+const SEARCH_PAGE_SIZE = 10;
+const RECENT_SUBSET_SIZE = 3;
+const SEARCH_SKELETON_MS = 350;   // skeleton inicial
+const SEARCH_RECENT_MS   = 250;   // tempo "recent visível" antes do loading-more aparecer
+const SEARCH_FULL_MS     = 1500;  // tempo total até full carregar
+
+// Linha skeleton (shimmer) — usada durante a busca inicial enquanto
+// o backend ainda não devolveu nada.
+const SearchSkeletonRow = ({ tone = "atendimento" }) => {
+  const c = window.CCM.c;
+  const bg = tone === "atendimento" ? c.secundaryLightest : "#fff";
+  const border = tone === "atendimento" ? "transparent" : c.border;
+  return (
+    <div style={{
+      display: "flex", alignItems: "center", gap: 12,
+      background: bg, border: `1px solid ${border}`,
+      borderRadius: 10, padding: "12px 14px", marginBottom: 8,
+    }}>
+      <div className="ccm-shimmer" style={{
+        width: 32, height: 32, borderRadius: "50%", flexShrink: 0,
+      }} />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div className="ccm-shimmer" style={{
+          height: 12, width: "55%", borderRadius: 4, marginBottom: 8,
+        }} />
+        <div className="ccm-shimmer" style={{
+          height: 10, width: "75%", borderRadius: 4,
+        }} />
+      </div>
+    </div>
+  );
+};
+
+// Linha "carregando mais" — aparece entre o subset recente e a página completa.
+const LoadingMoreInline = ({ label }) => {
+  const c = window.CCM.c;
+  return (
+    <div style={{
+      display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+      padding: "12px 14px", marginBottom: 8,
+      background: c.primaryLightest, borderRadius: 10,
+      fontSize: 12, color: c.primary, fontWeight: 600,
+    }}>
+      <i className="ph ph-circle-notch ccm-spin" style={{ fontSize: 14 }} />
+      {label}
+    </div>
+  );
+};
+
+// Paginação numérica compacta — janela de até 5 botões + ellipsis.
+// Esconde-se automaticamente quando só há 1 página.
+const SearchPagination = ({ page, totalPages, total, pageSize, onChange }) => {
+  const c = window.CCM.c;
+  if (totalPages <= 1) return null;
+
+  const start = (page - 1) * pageSize + 1;
+  const end = Math.min(page * pageSize, total);
+
+  const windowSize = 5;
+  let first = Math.max(1, page - 2);
+  let last = Math.min(totalPages, first + windowSize - 1);
+  first = Math.max(1, last - windowSize + 1);
+  const pages = [];
+  for (let i = first; i <= last; i++) pages.push(i);
+
+  const btnStyle = (active, disabled) => ({
+    minWidth: 28, height: 28, padding: "0 8px",
+    border: `1px solid ${active ? c.primary : c.border}`,
+    background: active ? c.primary : "#fff",
+    color: active ? "#fff" : (disabled ? c.fg3 : c.fg1),
+    borderRadius: 8, cursor: disabled ? "not-allowed" : "pointer",
+    fontSize: 12, fontWeight: 600,
+    opacity: disabled ? 0.4 : 1,
+    fontFamily: "Montserrat, sans-serif",
+    display: "inline-flex", alignItems: "center", justifyContent: "center",
+  });
+
+  return (
+    <div style={{
+      display: "flex", alignItems: "center", justifyContent: "space-between",
+      marginTop: 10, paddingTop: 12, borderTop: `1px solid ${c.borderSoft}`,
+      flexWrap: "wrap", gap: 8,
+    }}>
+      <div style={{ fontSize: 11, color: c.fg3 }}>
+        Exibindo <strong style={{ color: c.fg2 }}>{start}–{end}</strong> de{" "}
+        <strong style={{ color: c.fg2 }}>{total}</strong> · Página {page} de {totalPages}
+      </div>
+      <div style={{ display: "flex", gap: 4 }}>
+        <button
+          onClick={() => onChange(page - 1)}
+          disabled={page === 1}
+          style={btnStyle(false, page === 1)}
+          aria-label="Página anterior"
+        ><i className="ph ph-caret-left" /></button>
+        {first > 1 && (
+          <React.Fragment>
+            <button onClick={() => onChange(1)} style={btnStyle(false, false)}>1</button>
+            {first > 2 && (
+              <span style={{ alignSelf: "center", color: c.fg3, fontSize: 11, padding: "0 2px" }}>…</span>
+            )}
+          </React.Fragment>
+        )}
+        {pages.map(p => (
+          <button key={p} onClick={() => onChange(p)} style={btnStyle(p === page, false)}>{p}</button>
+        ))}
+        {last < totalPages && (
+          <React.Fragment>
+            {last < totalPages - 1 && (
+              <span style={{ alignSelf: "center", color: c.fg3, fontSize: 11, padding: "0 2px" }}>…</span>
+            )}
+            <button onClick={() => onChange(totalPages)} style={btnStyle(false, false)}>{totalPages}</button>
+          </React.Fragment>
+        )}
+        <button
+          onClick={() => onChange(page + 1)}
+          disabled={page === totalPages}
+          style={btnStyle(false, page === totalPages)}
+          aria-label="Próxima página"
+        ><i className="ph ph-caret-right" /></button>
+      </div>
+    </div>
+  );
+};
+
+const ContactResultRow = ({ contact, query, onOpen, onFilterByContact, isFilterActive = false }) => {
   const c = window.CCM.c;
   const [hover, setHover] = React.useState(false);
+  const [filterHover, setFilterHover] = React.useState(false);
   return (
     <div
       role="button"
@@ -919,16 +1256,18 @@ const ContactResultRow = ({ contact, query, onOpen }) => {
       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpen(); } }}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
+      aria-label={`Abrir histórico de ${contact.name}`}
       style={{
         display: "flex", alignItems: "center", gap: 12,
+        // Filtro ativo: fundo branco + borda primary (sem inundar de roxo).
+        // O funil filled + o banner do filtro já comunicam o estado.
         background: hover ? c.primaryLightest : "#fff",
-        border: `1px solid ${hover ? c.primary : c.border}`,
+        border: `1px solid ${isFilterActive ? c.primary : (hover ? c.primary : c.border)}`,
         borderRadius: 10, padding: "12px 14px",
         marginBottom: 8, cursor: "pointer",
         transition: "background 120ms ease, border-color 120ms ease",
         outline: "none",
       }}
-      title={`Abrir histórico de ${contact.name}`}
     >
       <span style={{
         width: 36, height: 36, borderRadius: "50%",
@@ -975,20 +1314,53 @@ const ContactResultRow = ({ contact, query, onOpen }) => {
         </div>
       </div>
 
-      <span
-        aria-label="Ver histórico do contato"
-        title="Ver histórico do contato"
-        style={{
-          width: 32, height: 32, borderRadius: 8,
-          display: "flex", alignItems: "center", justifyContent: "center",
-          color: hover ? c.primary : c.fg3,
-          background: hover ? "#fff" : "transparent",
-          flexShrink: 0,
-          transition: "background 120ms ease, color 120ms ease",
-        }}
-      >
-        <i className="ph ph-eye" style={{ fontSize: 18 }} />
-      </span>
+      <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
+        {onFilterByContact && (
+          <CCMTooltip label="Filtre pelos atendimentos deste contato">
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onFilterByContact(contact.id); }}
+              onMouseEnter={(e) => { e.stopPropagation(); setFilterHover(true); }}
+              onMouseLeave={() => setFilterHover(false)}
+              aria-label="Filtre pelos atendimentos deste contato"
+              style={{
+                width: 32, height: 32, borderRadius: 8,
+                border: `1px solid ${isFilterActive ? c.primary : "transparent"}`,
+                padding: 0, cursor: "pointer",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                // Filtro ativo: pill com borda primary + ícone primary (sem fundo sólido)
+                background: isFilterActive
+                  ? c.primaryLightest
+                  : (filterHover ? c.primaryLightest : "transparent"),
+                color: isFilterActive || filterHover
+                  ? c.primary
+                  : (hover ? c.primary : c.fg3),
+                transition: "background 120ms ease, color 120ms ease, border-color 120ms ease",
+                fontFamily: "Montserrat, sans-serif",
+              }}
+            >
+              <i
+                className={`${isFilterActive ? "ph-fill" : "ph"} ph-funnel-simple`}
+                style={{ fontSize: 18 }}
+              />
+            </button>
+          </CCMTooltip>
+        )}
+        <CCMTooltip label="Ver histórico do contato">
+          <span
+            aria-label="Ver histórico do contato"
+            style={{
+              width: 32, height: 32, borderRadius: 8,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              color: hover ? c.primary : c.fg3,
+              background: hover ? "#fff" : "transparent",
+              transition: "background 120ms ease, color 120ms ease",
+            }}
+          >
+            <i className="ph ph-eye" style={{ fontSize: 18 }} />
+          </span>
+        </CCMTooltip>
+      </div>
     </div>
   );
 };
@@ -1013,7 +1385,7 @@ const SearchResultRow = ({ atendimento, contact, status, statusColor, query, mat
         transition: "background 120ms ease, border-color 120ms ease",
         outline: "none",
       }}
-      title="Abrir atendimento"
+      aria-label="Abrir atendimento"
     >
       <span style={{
         width: 32, height: 32, borderRadius: "50%",
@@ -1062,9 +1434,9 @@ const SearchResultRow = ({ atendimento, contact, status, statusColor, query, mat
         </div>
       </div>
 
+      <CCMTooltip label="Visualizar atendimento">
       <span
         aria-label="Visualizar atendimento"
-        title="Visualizar atendimento"
         style={{
           width: 32, height: 32, borderRadius: 8,
           display: "flex", alignItems: "center", justifyContent: "center",
@@ -1076,6 +1448,7 @@ const SearchResultRow = ({ atendimento, contact, status, statusColor, query, mat
       >
         <i className="ph ph-eye" style={{ fontSize: 18 }} />
       </span>
+      </CCMTooltip>
     </div>
   );
 };

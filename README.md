@@ -3,6 +3,22 @@
 Protótipo do módulo **Central de Comunicação Multicanal (CCM) — Atendimentos e Conversas** da Vonex.
 Origem: exportado do [Claude Design](https://claude.ai/design) em 2026-05-11.
 
+> ### 🔁 De-Para para o Angular (`ngx-ccm`)
+> Este protótipo serve de **referência para recriar as telas no codebase Angular**.
+> O mapeamento completo (componentes, cores, fontes, tokens) está em **[`de-para/`](de-para/README.md)**:
+> - [`de-para/README.md`](de-para/README.md) — visão geral + mapa rápido tela→Angular
+> - [`de-para/01-design-tokens.md`](de-para/01-design-tokens.md) — cores/tipografia/espaçamento → variáveis Angular
+> - [`de-para/02-componentes.md`](de-para/02-componentes.md) — componente React → componente Angular (classe/seletor/caminho)
+> - [`de-para/03-convencoes-angular.md`](de-para/03-convencoes-angular.md) — convenções do `ngx-ccm` p/ a conversão
+>
+> Além disso, **cada `.jsx` tem um banner de cabeçalho** "DE-PARA REACT → ANGULAR" e
+> o **`src/tokens.js` anota cada cor** com a variável Angular correspondente.
+
+> ### 📋 Especificação para o time de desenvolvimento (Back-end / Front-end)
+> Cenários de uso e testes de aprovação derivados do protótipo, em **[`especificacao/`](especificacao/)**:
+> - [`especificacao/CENARIOS-BDD.md`](especificacao/CENARIOS-BDD.md) — todos os cenários de uso em **Gherkin** (Dado/Quando/Então), com glossário de entidades. Foco no **Back-end**. Agnóstico de arquitetura/linguagem.
+> - [`especificacao/TESTES-TDD.md`](especificacao/TESTES-TDD.md) — catálogo de **testes** (unitários de regra de negócio, integração, aceitação E2E, negativos, não-funcionais) que a tarefa precisa passar, com matriz de rastreabilidade e Definition of Done.
+
 ## Stack
 
 HTML + JSX + Babel standalone (transpila no carregamento). Sem build, sem watcher, sem `package.json`. Edita `.jsx` → recarrega navegador (Ctrl+R) → vê resultado.

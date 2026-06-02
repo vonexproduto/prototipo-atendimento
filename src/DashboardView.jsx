@@ -1,4 +1,28 @@
 // DashboardView.jsx — Dashboard de chat (relatórios)
+// =====================================================================
+// DE-PARA REACT → ANGULAR  ·  DashboardView.jsx
+// ---------------------------------------------------------------------
+// Dashboard de chat (KPIs + gráficos por canal + tabela por atendente).
+// Módulo Angular: @modules/chat-one-to-one/components/chat-dashboard.
+//
+//   DashboardView       → ChatDashboardComponent <app-chat-dashboard>
+//                         (header = ChatDashboardHeaderComponent
+//                          <app-chat-dashboard-header>)
+//   KpiCard             → cards básicos: ChatDashBasicInfoComponent
+//                         <app-chat-dash-basic-info>
+//   ChannelChart/Row    → ChatDashMessagesPerChannelComponent
+//                         <app-chat-dash-messages-per-channel> e
+//                         ChatDashChatsPerChannelComponent <app-chat-dash-chats-per-channel>
+//                         (barras = CcmProgressChartComponent <ccm-progress-chart>;
+//                          pizza = CcmPieChartComponent <ccm-pie-chart>)
+//   WhatsAppCategoriesCard → ChatDashWhatsappCategoriesRankComponent
+//                         <app-chat-dash-whatsapp-categories-rank>
+//   AttendantTable      → ChatDashChatsPerAttendantComponent
+//                         <app-chat-dash-chats-per-attendant> (grid = <ccm-table>)
+//   filtros avançados   → ChatDashAdvancedFiltersModalComponent
+//                         <app-chat-dash-advanced-filters-modal>
+// Doc: de-para/02-componentes.md
+// =====================================================================
 const DashboardView = () => {
   const c = window.CCM.c;
 

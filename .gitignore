@@ -1,7 +1,15 @@
 node_modules/
 scraps/
+_handoff/
 .claude/
 .DS_Store
 Thumbs.db
+
+# Backups e análises locais (não versionar)
+*.rar
+*.zip
+_analysis.txt
+_diag.txt
+_hex.txt
 
 .vercel

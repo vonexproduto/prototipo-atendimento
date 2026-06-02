@@ -1,3 +1,18 @@
+// =====================================================================
+// DE-PARA REACT → ANGULAR  ·  ContatoHistoricoPeek.jsx
+// ---------------------------------------------------------------------
+//   ContatoHistoricoPeek → ChatContactJourneyComponent <app-chat-contact-journey>
+//                          @modules/chat-one-to-one/components/chat-contact-journey/
+//                          (drawer/peek com a "jornada"/histórico do contato:
+//                           todas as mensagens, conversas e atendimentos).
+//   thread + MessageBubble (reusado de ConversaPanel) → ChatCoreComponent
+//                          <app-chat-core> + <app-chat-message>
+//   AtendimentoMarker    → separador/âncora de atendimento dentro da timeline
+//   FilaFilterRow        → filtro por fila (chips .ccm-chips + mat-checkbox)
+//   TotalsCell/PeopleList→ cartões de totais por canal/atendente (sem 1:1; layout)
+//   overlay/peek         → mat-drawer/CDK overlay (tema material-drawer.scss)
+// Doc: de-para/02-componentes.md
+// =====================================================================
 // ContatoHistoricoPeek.jsx — side peek com histórico completo de UM contato:
 // todas as mensagens, conversas e atendimentos em que ele aparece,
 // em ordem cronológica. Reaproveita MessageBubble/DayChip de ConversaPanel
@@ -233,22 +248,26 @@ const ContatoHistoricoPeek = ({
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-            <button onClick={onClose} title="Recolher" style={{
-              width: 32, height: 32, borderRadius: 8, border: 0,
-              background: "transparent", color: c.fg2, cursor: "pointer",
-              display: "flex", alignItems: "center", justifyContent: "center",
-            }}
-              onMouseEnter={e => { e.currentTarget.style.background = c.borderSoft; e.currentTarget.style.color = c.fg1; }}
-              onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = c.fg2; }}
-            ><i className="ph ph-caret-double-right" style={{ fontSize: 16 }} /></button>
-            <button onClick={onToggleExpand} title={expanded ? "Recolher conteúdo" : "Expandir conteúdo"} style={{
-              width: 32, height: 32, borderRadius: 8, border: 0,
-              background: "transparent", color: c.fg2, cursor: "pointer",
-              display: "flex", alignItems: "center", justifyContent: "center",
-            }}
-              onMouseEnter={e => { e.currentTarget.style.background = c.borderSoft; e.currentTarget.style.color = c.fg1; }}
-              onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = c.fg2; }}
-            ><i className={`ph ${expanded ? "ph-arrows-in-simple" : "ph-arrows-out-simple"}`} style={{ fontSize: 16 }} /></button>
+            <CCMTooltip label="Recolher">
+              <button onClick={onClose} aria-label="Recolher" style={{
+                width: 32, height: 32, borderRadius: 8, border: 0,
+                background: "transparent", color: c.fg2, cursor: "pointer",
+                display: "flex", alignItems: "center", justifyContent: "center",
+              }}
+                onMouseEnter={e => { e.currentTarget.style.background = c.borderSoft; e.currentTarget.style.color = c.fg1; }}
+                onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = c.fg2; }}
+              ><i className="ph ph-caret-double-right" style={{ fontSize: 16 }} /></button>
+            </CCMTooltip>
+            <CCMTooltip label={expanded ? "Recolher conteúdo" : "Expandir conteúdo"}>
+              <button onClick={onToggleExpand} aria-label={expanded ? "Recolher conteúdo" : "Expandir conteúdo"} style={{
+                width: 32, height: 32, borderRadius: 8, border: 0,
+                background: "transparent", color: c.fg2, cursor: "pointer",
+                display: "flex", alignItems: "center", justifyContent: "center",
+              }}
+                onMouseEnter={e => { e.currentTarget.style.background = c.borderSoft; e.currentTarget.style.color = c.fg1; }}
+                onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = c.fg2; }}
+              ><i className={`ph ${expanded ? "ph-arrows-in-simple" : "ph-arrows-out-simple"}`} style={{ fontSize: 16 }} /></button>
+            </CCMTooltip>
           </div>
           <span style={{
             width: 30, height: 30, borderRadius: "50%",
@@ -338,17 +357,19 @@ const ContatoHistoricoPeek = ({
                     Filas de atendimento
                   </div>
                   {activeFilas.size > 0 && (
-                    <button
-                      onClick={() => setActiveFilas(new Set())}
-                      title="Limpar filtros de fila"
-                      style={{
-                        border: 0, background: "transparent",
-                        color: c.primary, cursor: "pointer",
-                        fontSize: 10, fontWeight: 700,
-                        fontFamily: "Montserrat, sans-serif",
-                        padding: 0,
-                      }}
-                    >Limpar</button>
+                    <CCMTooltip label="Limpar filtros de fila">
+                      <button
+                        onClick={() => setActiveFilas(new Set())}
+                        aria-label="Limpar filtros de fila"
+                        style={{
+                          border: 0, background: "transparent",
+                          color: c.primary, cursor: "pointer",
+                          fontSize: 10, fontWeight: 700,
+                          fontFamily: "Montserrat, sans-serif",
+                          padding: 0,
+                        }}
+                      >Limpar</button>
+                    </CCMTooltip>
                   )}
                 </div>
                 <div>
@@ -453,58 +474,59 @@ const ContatoHistoricoPeek = ({
                   {filteredAtendimentos.map(at => {
                     const isHighlighted = highlightedAtId === at.id;
                     return (
-                      <div
-                        key={at.id}
-                        onClick={() => scrollToAtendimento(at.id)}
-                        title="Ir para mensagens deste atendimento"
-                        style={{
-                          display: "flex", alignItems: "center", gap: 8,
-                          padding: "8px 10px", borderRadius: 8,
-                          background: isHighlighted ? c.primaryLightest : c.borderSoft,
-                          border: `1px solid ${isHighlighted ? c.primary : "transparent"}`,
-                          fontSize: 11, color: c.fg1, cursor: "pointer",
-                          transition: "background 150ms ease, border-color 150ms ease",
-                        }}
-                        onMouseEnter={(e) => {
-                          if (!isHighlighted) {
-                            e.currentTarget.style.background = c.primaryLightest;
-                            e.currentTarget.style.borderColor = c.primaryLight;
-                          }
-                        }}
-                        onMouseLeave={(e) => {
-                          if (!isHighlighted) {
-                            e.currentTarget.style.background = c.borderSoft;
-                            e.currentTarget.style.borderColor = "transparent";
-                          }
-                        }}
-                      >
-                        <i className="ph ph-tag" style={{ fontSize: 12, color: c.fg2 }} />
-                        <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
-                          <span style={{
-                            display: "flex", alignItems: "center", gap: 6,
-                            fontWeight: 700,
-                            color: isHighlighted ? c.primary : c.fg1,
-                          }}>
-                            #{at.id}
+                      <CCMTooltip key={at.id} label="Ir para mensagens deste atendimento">
+                        <div
+                          onClick={() => scrollToAtendimento(at.id)}
+                          aria-label="Ir para mensagens deste atendimento"
+                          style={{
+                            display: "flex", alignItems: "center", gap: 8,
+                            padding: "8px 10px", borderRadius: 8,
+                            background: isHighlighted ? c.primaryLightest : c.borderSoft,
+                            border: `1px solid ${isHighlighted ? c.primary : "transparent"}`,
+                            fontSize: 11, color: c.fg1, cursor: "pointer",
+                            transition: "background 150ms ease, border-color 150ms ease",
+                          }}
+                          onMouseEnter={(e) => {
+                            if (!isHighlighted) {
+                              e.currentTarget.style.background = c.primaryLightest;
+                              e.currentTarget.style.borderColor = c.primaryLight;
+                            }
+                          }}
+                          onMouseLeave={(e) => {
+                            if (!isHighlighted) {
+                              e.currentTarget.style.background = c.borderSoft;
+                              e.currentTarget.style.borderColor = "transparent";
+                            }
+                          }}
+                        >
+                          <i className="ph ph-tag" style={{ fontSize: 12, color: c.fg2 }} />
+                          <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
                             <span style={{
-                              color: c.fg2, fontWeight: 500,
-                              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                            }}>{(at.titulo || "").split("—")[0].trim()}</span>
-                          </span>
-                          {at.dataInicio && (
-                            <span style={{ fontSize: 10, color: c.fg3, marginTop: 1 }}>
-                              {at.dataInicio}
+                              display: "flex", alignItems: "center", gap: 6,
+                              fontWeight: 700,
+                              color: isHighlighted ? c.primary : c.fg1,
+                            }}>
+                              #{at.id}
+                              <span style={{
+                                color: c.fg2, fontWeight: 500,
+                                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                              }}>{(at.titulo || "").split("—")[0].trim()}</span>
                             </span>
+                            {at.dataInicio && (
+                              <span style={{ fontSize: 10, color: c.fg3, marginTop: 1 }}>
+                                {at.dataInicio}
+                              </span>
+                            )}
+                          </div>
+                          {at.status && (
+                            <span style={{
+                              background: "#fff", color: c.fg2,
+                              fontSize: 9, fontWeight: 700, padding: "2px 6px", borderRadius: 999,
+                              flexShrink: 0,
+                            }}>{at.status}</span>
                           )}
                         </div>
-                        {at.status && (
-                          <span style={{
-                            background: "#fff", color: c.fg2,
-                            fontSize: 9, fontWeight: 700, padding: "2px 6px", borderRadius: 999,
-                            flexShrink: 0,
-                          }}>{at.status}</span>
-                        )}
-                      </div>
+                      </CCMTooltip>
                     );
                   })}
                 </div>
@@ -675,51 +697,54 @@ const FilaFilterRow = ({ fila, msgs, convs, active, onToggle }) => {
   const m = (fila || "").match(/^(\S+)\s+(.+)$/);
   const icon = m ? m[1] : "";
   const name = m ? m[2] : fila;
+  const tooltipLabel = active ? "Remover filtro desta fila" : "Filtrar mensagens desta fila";
   return (
-    <div
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
-      onClick={onToggle}
-      title={active ? "Remover filtro desta fila" : "Filtrar mensagens desta fila"}
-      style={{
-        display: "flex", alignItems: "center", gap: 8,
-        padding: "6px 8px", borderRadius: 8,
-        cursor: "pointer",
-        background: active ? c.primaryLightest : (hover ? c.borderSoft : "transparent"),
-        border: `1px solid ${active ? c.primaryLight : "transparent"}`,
-        marginBottom: 4,
-        transition: "background 150ms ease, border-color 150ms ease",
-      }}
-    >
-      <span style={{
-        fontSize: 14, width: 18, textAlign: "center", flexShrink: 0,
-      }}>{icon || "—"}</span>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{
-          fontSize: 11,
-          fontWeight: active ? 700 : 500,
-          color: active ? c.primary : c.fg1,
-          whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-        }}>{name}</div>
-        <div style={{ fontSize: 9, color: c.fg3, marginTop: 1 }}>
-          {msgs} {msgs === 1 ? "msg" : "msgs"} · {convs} {convs === 1 ? "conv" : "convs"}
-        </div>
-      </div>
-      <span
-        aria-hidden
+    <CCMTooltip label={tooltipLabel}>
+      <div
+        onMouseEnter={() => setHover(true)}
+        onMouseLeave={() => setHover(false)}
+        onClick={onToggle}
+        aria-label={tooltipLabel}
         style={{
-          width: 22, height: 22, borderRadius: 6,
-          display: "flex", alignItems: "center", justifyContent: "center",
-          background: active ? c.primary : (hover ? "#fff" : "transparent"),
-          color: active ? "#fff" : c.fg2,
-          border: active ? "none" : (hover ? `1px solid ${c.border}` : "1px solid transparent"),
-          flexShrink: 0,
-          transition: "background 150ms ease, color 150ms ease, border-color 150ms ease",
+          display: "flex", alignItems: "center", gap: 8,
+          padding: "6px 8px", borderRadius: 8,
+          cursor: "pointer",
+          background: active ? c.primaryLightest : (hover ? c.borderSoft : "transparent"),
+          border: `1px solid ${active ? c.primaryLight : "transparent"}`,
+          marginBottom: 4,
+          transition: "background 150ms ease, border-color 150ms ease",
         }}
       >
-        <i className={active ? "ph-fill ph-funnel-simple" : "ph ph-funnel-simple"} style={{ fontSize: 12 }} />
-      </span>
-    </div>
+        <span style={{
+          fontSize: 14, width: 18, textAlign: "center", flexShrink: 0,
+        }}>{icon || "—"}</span>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{
+            fontSize: 11,
+            fontWeight: active ? 700 : 500,
+            color: active ? c.primary : c.fg1,
+            whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+          }}>{name}</div>
+          <div style={{ fontSize: 9, color: c.fg3, marginTop: 1 }}>
+            {msgs} {msgs === 1 ? "msg" : "msgs"} · {convs} {convs === 1 ? "conv" : "convs"}
+          </div>
+        </div>
+        <span
+          aria-hidden
+          style={{
+            width: 22, height: 22, borderRadius: 6,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            background: active ? c.primary : (hover ? "#fff" : "transparent"),
+            color: active ? "#fff" : c.fg2,
+            border: active ? "none" : (hover ? `1px solid ${c.border}` : "1px solid transparent"),
+            flexShrink: 0,
+            transition: "background 150ms ease, color 150ms ease, border-color 150ms ease",
+          }}
+        >
+          <i className={active ? "ph-fill ph-funnel-simple" : "ph ph-funnel-simple"} style={{ fontSize: 12 }} />
+        </span>
+      </div>
+    </CCMTooltip>
   );
 };
 

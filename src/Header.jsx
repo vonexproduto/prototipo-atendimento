@@ -1,4 +1,23 @@
 // Header.jsx — top app bar
+// =====================================================================
+// DE-PARA REACT → ANGULAR  ·  Header.jsx
+// ---------------------------------------------------------------------
+// Barra de navegação superior do app (logo, nav, ações, avatar).
+//
+//   Header        → HeaderComponent              <app-header>
+//                   @core/components/header/
+//   HeaderIcon    → (botões-ícone do header; no Angular ficam inline no
+//                    header.component.html). Ícone "tray/inbox" =
+//                    HeaderInboxComponent        <app-header-inbox>
+//                   @core/components/header-inbox/
+//   (engrenagem)  → abre o SettingsMenu (ver SettingsMenu.jsx) — no Angular,
+//                    família header-menu-* em @core/components/header-menu-*
+//   (botão +)     → HeaderMenuQuickCreateComponent <app-header-menu-quick-create>
+//   (avatar "CA") → HeaderUserProfileComponent   <app-header-user-profile>
+//
+// Ícones: protótipo usa Phosphor (ph-*). Angular usa o set próprio do ngx-ccm
+// (conferir com o time de front qual ícone equivalente). Doc: de-para/02-componentes.md
+// =====================================================================
 const Header = ({ active = "Chat", onNav }) => {
   const c = window.CCM.c;
   const items = [
