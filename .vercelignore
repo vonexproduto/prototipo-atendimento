@@ -1,0 +1,12 @@
+# Não publicar backups, material interno e artefatos locais
+*.rar
+*.zip
+scraps
+_handoff
+_analysis.txt
+_diag.txt
+_hex.txt
+node_modules
+.git
+.claude
+uploads
