@@ -503,46 +503,160 @@ Funcionalidade: Buscar atendimentos e contatos
 
 # 8. Filtros avançados da lista
 
+> O painel "Filtros avançados" abre a partir da barra de ferramentas da lista e
+> **alimenta a mesma lista** exibida ao lado (e também as visões Kanban e Gantt).
+> A filtragem é **incremental, sem botão "aplicar"**: campos de texto filtram ao
+> **perder o foco** (ou Enter); seleções (dropdowns) filtram **na hora**. Os
+> critérios ativos aparecem como **chips** acima da lista, cada um removível, com
+> uma ação **"Limpar" (vassoura)** que zera todos.
+
 ```gherkin
 Funcionalidade: Filtros avançados de atendimentos
   Como atendente
-  Quero refinar a lista por múltiplos critérios
+  Quero refinar a lista de atendimentos por múltiplos critérios
+  Para localizar rapidamente os atendimentos relevantes
 
+  Contexto:
+    Dado que o painel "Filtros avançados" oferece os seguintes critérios:
+      | tipo    | critério                         |
+      | texto   | ID do atendimento                |
+      | texto   | Nome do atendimento              |
+      | texto   | Telefone do contato              |
+      | texto   | E-mail do contato                |
+      | texto   | CPF do contato                   |
+      | data    | Data de início                   |
+      | data    | Data de atualização              |
+      | seleção | Status do atendimento            |
+      | seleção | Atendentes                       |
+      | seleção | SLA                              |
+      | seleção | Marcadores                       |
+      | seleção | Redirecionamento por I.A.        |
+    E que a lista é refiltrada a cada critério aplicado
+    E que os critérios ativos são representados por chips acima da lista
+
+  # ── Buscas textuais ──────────────────────────────────────────────
+  @CEN-078
+  Cenário: Filtrar por ID do atendimento
+    Quando o atendente informa "123456" no campo "Pesquisar ID do atendimento"
+    Então a lista passa a conter apenas atendimentos cujo id contém esse texto
+
+  @CEN-078A
+  Cenário: Filtrar por nome do atendimento
+    Quando o atendente informa um termo no campo "Pesquisar nome do atendimento"
+    Então a lista passa a conter apenas atendimentos cujo nome/título contém o termo
+      (ignorando acentuação e diferença de maiúsculas/minúsculas)
+
+  @CEN-078B
+  Cenário: Filtrar por telefone do contato
+    Quando o atendente informa "994433221" no campo "Pesquisar por telefone do contato"
+    Então a lista passa a conter apenas atendimentos com algum contato cujo telefone
+      contém esses dígitos
+    E a comparação ignora máscara e pontuação (compara apenas dígitos)
+
+  @CEN-078C
+  Cenário: Filtrar por e-mail do contato
+    Quando o atendente informa um termo no campo "Pesquisar por email do contato"
+    Então a lista passa a conter apenas atendimentos com algum contato cujo e-mail
+      contém o termo (ignorando maiúsculas/minúsculas)
+
+  @CEN-078D
+  Cenário: Filtrar por CPF do contato
+    Quando o atendente informa "024.676.678-90" no campo "Pesquisar por CPF do contato"
+    Então a lista passa a conter apenas atendimentos com algum contato cujo CPF
+      corresponde aos mesmos dígitos (ignorando pontuação)
+
+  @CEN-078E
+  Cenário: A busca textual é aplicada ao sair do campo
+    Dado que o atendente está digitando em um dos campos de pesquisa
+    Quando ele sai do campo (perde o foco) ou pressiona Enter
+    Então a filtragem é executada com o valor digitado
+    Mas a lista não é refiltrada a cada tecla pressionada
+
+  @CEN-078F
+  Cenário: Limpar um campo de pesquisa textual
+    Dado que um campo de pesquisa textual possui um valor aplicado
+    Quando o atendente limpa o campo
+    Então o critério correspondente é removido e a lista é refiltrada
+
+  # ── Datas ────────────────────────────────────────────────────────
   @CEN-070
   Cenário: Filtrar por data de início
-    Quando o atendente filtra por um período (Hoje, 7, 30, 60, 90 dias ou personalizado)
-    Então o sistema retorna apenas atendimentos iniciados nesse período
+    Quando o atendente escolhe um período em "Data de início"
+      (Hoje, Últimos 7 dias, 30, 60, 90 dias ou Personalizado)
+    Então a lista passa a conter apenas atendimentos cuja data de início
+      está dentro do período escolhido
 
+  @CEN-070A
+  Cenário: Filtrar por data de atualização
+    Quando o atendente escolhe um período em "Data de atualização"
+    Então a lista passa a conter apenas atendimentos cuja data de atualização
+      (última atividade) está dentro do período escolhido
+    E as opções de período são as mesmas de "Data de início"
+
+  @CEN-070B
+  Cenário: Janela de período é relativa ao momento atual
+    Dado um período relativo como "Últimos 7 dias"
+    Quando o filtro é aplicado
+    Então o intervalo considerado vai de (agora − 7 dias) até agora
+    E "Hoje" considera apenas o dia corrente
+    # [regra a definir: "agora" = data/hora do servidor. No protótipo, por usar dados
+    #  de demonstração antigos, "agora" é ancorado na data mais recente do conjunto.]
+
+  @CEN-070C
+  Cenário: Período personalizado
+    Quando o atendente escolhe "Personalizado" em um filtro de data
+    Então deve ser possível informar uma faixa de datas (inicial e final)
+    # [regra a definir: seletor de intervalo — não implementado no protótipo]
+
+  @CEN-070D
+  Cenário: Re-selecionar o mesmo período limpa o filtro de data
+    Dado que um período já está selecionado em um filtro de data
+    Quando o atendente clica novamente na mesma opção
+    Então o filtro de data é removido (comportamento de alternância do radio)
+
+  # ── Seleções (dropdowns) ─────────────────────────────────────────
   @CEN-071
   Cenário: Filtrar por status
-    Quando o atendente filtra por status "Em andamento"
-    Então o sistema retorna apenas atendimentos com esse status
+    Quando o atendente seleciona um status no filtro (ex.: "Em andamento" ou "Finalizado")
+    Então a lista passa a conter apenas atendimentos do grupo de status correspondente
+
+  @CEN-071A
+  Cenário: Mapeamento dos status reais para os grupos do filtro
+    Dado que o filtro de status oferece os grupos "Em andamento" e "Finalizado"
+    Então "Finalizado" corresponde a atendimentos encerrados, finalizados ou cancelados
+    E "Em andamento" corresponde aos demais (abertos, pendentes, pausados)
+    # [regra a definir: mapeamento exato status → grupo, conforme a máquina de estados]
 
   @CEN-072
-  Cenário: Filtrar por atendente
-    Quando o atendente filtra por um ou mais atendentes
-    Então o sistema retorna apenas atendimentos vinculados aos atendentes escolhidos
+  Cenário: Filtrar por atendente (multi-seleção)
+    Quando o atendente seleciona um ou mais atendentes
+    Então a lista passa a conter apenas atendimentos vinculados a pelo menos um
+      dos atendentes escolhidos
 
   @CEN-073
   Cenário: Filtrar por SLA
-    Quando o atendente filtra por "Atrasado"
-    Então o sistema retorna apenas atendimentos com SLA vencido
+    Quando o atendente seleciona "Atrasado" no filtro de SLA
+    Então a lista passa a conter apenas atendimentos com SLA vencido (tempo negativo)
+
+  @CEN-073A
+  Cenário: Classes de SLA do filtro
+    Dado que o filtro de SLA oferece "No prazo", "Próximo ao prazo" e "Atrasado"
+    Então "Atrasado" corresponde a tempo negativo
+    E "Próximo ao prazo" corresponde a tempo positivo abaixo de um limiar
+    E "No prazo" corresponde a tempo positivo acima desse limiar
+    # [regra a definir: limiar de "próximo ao prazo" — no protótipo, ≤ 6 horas]
 
   @CEN-074
   Cenário: Filtrar por redirecionamento por I.A.
-    Quando o atendente filtra por "Redirecionado por I.A."
-    Então o sistema retorna apenas atendimentos que foram direcionados pela I.A.
-
-  @CEN-075
-  Cenário: Combinar filtros
-    Quando o atendente aplica filtros de status, atendente e SLA simultaneamente
-    Então o sistema retorna a interseção dos critérios
+    Quando o atendente seleciona "Redirecionado por I.A." ou "Não redirecionado por I.A."
+    Então a lista passa a conter apenas atendimentos com o respectivo estado de
+      redirecionamento por I.A.
 
   @CEN-076
   Cenário: Filtrar por marcador (multi-seleção)
-    Dado que existem marcadores cadastrados aplicados aos atendimentos
+    Dado que existem marcadores aplicados aos atendimentos
     Quando o atendente abre o filtro "Marcadores" e seleciona um ou mais marcadores
-    Então o sistema retorna apenas os atendimentos que possuem pelo menos um
+    Então a lista passa a conter apenas atendimentos que possuem pelo menos um
       dos marcadores selecionados
 
   @CEN-077
@@ -552,6 +666,56 @@ Funcionalidade: Filtros avançados de atendimentos
     Então a lista de opções é apresentada em ordem alfabética (pt-BR)
     E cada opção mostra um indicador visual da cor do marcador
     E há um campo de pesquisa para encontrar um marcador pelo nome
+
+  @CEN-079
+  Cenário: A opção "Todos" remove a restrição do grupo
+    Dado que um filtro de seleção (Status, SLA ou I.A.) oferece a opção "Todos"
+    Quando o atendente escolhe "Todos"
+    Então qualquer seleção daquele grupo é descartada
+    E o grupo deixa de restringir a lista
+
+  @CEN-079A
+  Cenário: A seleção em um dropdown é aplicada imediatamente
+    Quando o atendente marca ou desmarca uma opção em qualquer dropdown
+    Então a lista é refiltrada na mesma hora, sem necessidade de confirmar
+
+  # ── Combinação ───────────────────────────────────────────────────
+  @CEN-075
+  Cenário: Combinar filtros
+    Quando o atendente aplica critérios de grupos diferentes ao mesmo tempo
+      (ex.: SLA "Atrasado" + Marcador "Cliente VIP")
+    Então a lista é a interseção (E lógico) entre os grupos
+    E dentro de um mesmo grupo multi-seleção vale a união (OU lógico)
+
+  # ── Chips e limpeza ──────────────────────────────────────────────
+  @CEN-079B
+  Cenário: Chips dos filtros aplicados
+    Dado que há um ou mais critérios aplicados
+    Então acima da lista é exibido um chip para cada critério ativo
+    E cada valor de um filtro multi-seleção gera um chip próprio
+    E cada chip possui um botão para removê-lo
+
+  @CEN-079C
+  Cenário: Remover um filtro pelo chip
+    Dado que existe um chip de filtro aplicado
+    Quando o atendente clica no "X" do chip
+    Então aquele critério é removido
+    E a lista é refiltrada considerando os demais critérios
+
+  @CEN-079D
+  Cenário: Limpar todos os filtros
+    Dado que há um ou mais critérios aplicados
+    Quando o atendente aciona a ação "Limpar" (vassoura) ao final dos chips
+    Então todos os critérios são removidos de uma só vez
+    E a lista volta a exibir todos os atendimentos da fila
+    E os chips e a ação de limpar deixam de ser exibidos
+
+  @CEN-079E
+  Cenário: Filtros que não retornam nenhum atendimento
+    Dado um conjunto de critérios que nenhum atendimento satisfaz
+    Quando os filtros são aplicados
+    Então a lista é apresentada vazia, sem erro
+    E os chips permanecem visíveis para ajuste ou limpeza
 ```
 
 ---
@@ -1375,6 +1539,25 @@ Funcionalidade: Visualizar atendimentos em uma linha do tempo (Gantt)
   ausência do parâmetro) para o histórico completo, mantendo a mesma query.
 - **Paginação de busca (§7 CEN-068E..H):** suportar `page`/`size` e devolver o total
   para a UI calcular a janela de botões.
+- **Filtros avançados da lista (§8 CEN-070..079E):** o painel é o front-end de uma
+  consulta filtrável de atendimentos. O contrato relevante para o back-end é o
+  **conjunto de critérios** e sua semântica — a apresentação (chips, vassoura,
+  aplicar no blur) é responsabilidade do front-end. Pontos de atenção:
+  - **Combinação:** os critérios se combinam por **E** (interseção) entre grupos
+    diferentes e por **OU** (união) dentro de um grupo multi-seleção (atendentes,
+    marcadores, status, SLA, I.A.).
+  - **Buscas de contato:** telefone e CPF casam por **dígitos** (ignoram máscara);
+    e-mail e nome por **substring normalizada** (sem acento, sem caixa). Um
+    atendimento entra se **algum** de seus contatos casar.
+  - **Datas:** "Data de início" e "Data de atualização" usam janelas **relativas ao
+    "agora" do servidor** (Hoje, 7/30/60/90 dias) ou uma faixa personalizada
+    **[a definir]**. A `Data de atualização` é o mesmo campo de última atividade
+    citado abaixo.
+  - **Status e SLA:** o filtro agrupa valores crus em categorias ("Em andamento" vs
+    "Finalizado"; "No prazo"/"Próximo ao prazo"/"Atrasado"). O **mapeamento status →
+    grupo** e o **limiar de "próximo ao prazo"** são **[regra a definir]**.
+  - **Redirecionamento por I.A.:** pressupõe um indicador persistente por atendimento
+    de "foi redirecionado pela I.A." (sim/não) — ver §17.
 - **Filtro de Marcadores (§8 CEN-076):** a lista de marcadores disponíveis para o
   filtro deve ser derivada dos marcadores efetivamente em uso (ou de um catálogo
   persistido, conforme decisão de produto).

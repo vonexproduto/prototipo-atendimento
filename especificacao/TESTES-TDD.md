@@ -151,6 +151,29 @@
 | UT-PAG-07 | página N (última) | botão `→` desabilitado |
 | UT-PAG-08 | mudar termo ou filtro | reset → `page = 1` |
 
+### 1.12 Filtros avançados — predicados de filtragem  ·  ref @CEN-070..079E
+
+> Predicados puros que decidem se um atendimento entra na lista filtrada e como os
+> critérios se combinam. Determinísticos — escrever antes da camada de integração.
+
+| ID | Preparar | Executar | Verificar |
+|---|---|---|---|
+| UT-AFILT-01 | ids variados + termo `"1234"` | predicado de ID | casa quem contém "1234" no id (substring) |
+| UT-AFILT-02 | nome alvo `"Flávia"` + termo `"flavia"` | predicado de nome | casa (sem acento, sem caixa) |
+| UT-AFILT-03 | contato telefone `"(11)994433221"` + termo `"994433221"` | predicado de telefone | casa por dígitos (ignora máscara) |
+| UT-AFILT-04 | contato e-mail `"julia@gmail.com"` + termo `"gmail"` | predicado de e-mail | casa por substring (sem caixa) |
+| UT-AFILT-05 | contato CPF `"024.676.678-90"` + termo `"02467667890"` | predicado de CPF | casa por dígitos |
+| UT-AFILT-06 | status `Aberto` / `Pendente` / `Pausado` | classificar grupo de status | grupo = "Em andamento" |
+| UT-AFILT-07 | status `Finalizado` / `Encerrado` / `Cancelado` | classificar grupo de status | grupo = "Finalizado" |
+| UT-AFILT-08 | SLA `"-1m"` / `"-5d"` | classificar grupo de SLA | "Atrasado" (tempo negativo) |
+| UT-AFILT-09 | SLA `"+3h"` (≤ limiar) | classificar grupo de SLA | "Próximo ao prazo" **[limiar a definir; protótipo = 6h = 360min]** |
+| UT-AFILT-10 | SLA `"+2d"` (> limiar) | classificar grupo de SLA | "No prazo" |
+| UT-AFILT-11 | período "Últimos 7 dias", âncora `agora` | montar janela de datas | intervalo `[agora−7d, agora]`; "Hoje" = dia corrente de `agora` |
+| UT-AFILT-12 | grupo multi-seleção com 2 valores | combinar dentro do grupo | união (OU): casa quem tem qualquer um dos valores |
+| UT-AFILT-13 | critérios de grupos diferentes | combinar entre grupos | interseção (E): casa quem satisfaz todos os grupos |
+| UT-AFILT-14 | opção "Todos" marcada em um grupo | resolver predicado do grupo | grupo não restringe (equivale a sem filtro) |
+| UT-AFILT-15 | nenhum critério ativo | aplicar | lista inalterada (todos os atendimentos da fila) |
+
 ---
 
 ## 2. Testes de integração / domínio (`INT-`)
@@ -282,7 +305,13 @@
 | INT-CFILT-03 | filtro ativo e atendente muda o termo de busca | observar | filtro de contato é descartado |
 | INT-CFILT-04 | filtro ativo | observar paginação | recalculada sobre o subconjunto filtrado |
 
-### 2.14 Filtro de Marcadores na lista  ·  ref @CEN-076, @CEN-077
+### 2.14 Filtros avançados da lista (painel)  ·  ref @CEN-070..079E
+
+> O painel alimenta a mesma lista (e as visões Kanban/Gantt). Filtragem incremental,
+> **sem botão "aplicar"**: buscas textuais aplicam ao perder o foco / Enter; seleções
+> aplicam na hora.
+
+**Marcadores**
 
 | ID | Preparar | Executar | Verificar |
 |---|---|---|---|
@@ -290,6 +319,44 @@
 | INT-MFILT-02 | multi-seleção `["Pagamento", "Urgente"]` | filtrar | retorna atendimentos com pelo menos UM dos marcadores |
 | INT-MFILT-03 | dropdown de marcadores | observar lista | inclui apenas marcadores efetivamente em uso, em ordem alfabética pt-BR |
 | INT-MFILT-04 | dropdown aberto + termo "Pag" | filtrar opções | mostra "Pagamento" |
+
+**Buscas textuais de contato (aplicação no blur / Enter)**
+
+| ID | Preparar | Executar | Verificar |
+|---|---|---|---|
+| INT-AFILT-01 | fila com vários atendimentos | digitar o telefone de um contato e sair do campo | lista reduz aos atendimentos daquele contato; casa por dígitos |
+| INT-AFILT-02 | idem | digitar e-mail parcial e sair do campo | lista reduz aos atendimentos com contato cujo e-mail contém o termo |
+| INT-AFILT-03 | idem | digitar CPF com máscara e sair do campo | casa por dígitos; lista reduzida |
+| INT-AFILT-04 | campo de busca em foco | digitar sem sair do campo | a lista **não** é refiltrada enquanto o campo mantém o foco |
+| INT-AFILT-05 | termo digitado em um campo | pressionar Enter | aplica imediatamente (equivale a sair do campo) |
+| INT-AFILT-06 | campo de busca com valor aplicado | limpar o campo | o critério é removido e a lista é refiltrada |
+
+**Datas (início e atualização)**
+
+| ID | Preparar | Executar | Verificar |
+|---|---|---|---|
+| INT-AFILT-07 | datas de início variadas | aplicar "Data de início = Últimos 7 dias" | retorna só os iniciados em `[agora−7d, agora]` |
+| INT-AFILT-08 | datas de atualização variadas | aplicar "Data de atualização = Hoje" | retorna só os atualizados no dia corrente |
+| INT-AFILT-09 | período já selecionado | clicar de novo na mesma opção | filtro de data removido (toggle do radio) |
+
+**Seleções e combinação**
+
+| ID | Preparar | Executar | Verificar |
+|---|---|---|---|
+| INT-AFILT-10 | status diversos | filtrar "Finalizado" | retorna só encerrados/finalizados/cancelados |
+| INT-AFILT-11 | SLA diversos | filtrar "Atrasado" | retorna só os de tempo negativo |
+| INT-AFILT-12 | SLA "Atrasado" **+** Marcador "Cliente VIP" | aplicar ambos | retorna a interseção (E entre grupos) |
+| INT-AFILT-13 | atendentes variados | selecionar 2 atendentes | retorna quem tem pelo menos um deles (OU no grupo) |
+| INT-AFILT-14 | grupo Status com seleção ativa | escolher "Todos" | grupo deixa de restringir; seleção anterior descartada |
+| INT-AFILT-15 | redirecionados e não-redirecionados por I.A. | filtrar "Redirecionado por I.A." | retorna apenas os redirecionados |
+
+**Chips e limpeza**
+
+| ID | Preparar | Executar | Verificar |
+|---|---|---|---|
+| INT-AFILT-16 | dois critérios aplicados (ex.: telefone + SLA) | observar área acima da lista | um chip por critério; multi-seleção gera um chip por valor |
+| INT-AFILT-17 | chip de um critério | clicar no "X" do chip | aquele critério é removido; lista refiltrada pelos demais |
+| INT-AFILT-18 | vários critérios aplicados | acionar "Limpar" (vassoura) | todos os critérios somem; lista volta ao conjunto da fila; chips desaparecem |
 
 ### 2.15 Vincular conversa a outro atendimento  ·  ref @CEN-210..216
 
@@ -366,7 +433,7 @@
 | E2E-04 | Ativar visão por SLA → conferir ordenação → inverter ordem | @CEN-013, @CEN-032, @CEN-033 |
 | E2E-05 | Trocar status pela lista e pelo detalhe → ver persistência | @CEN-040 |
 | E2E-06 | Buscar por número, por nome e por CPF com e sem filtros | @CEN-060..064 |
-| E2E-07 | Aplicar filtros avançados combinados | @CEN-070..075 |
+| E2E-07 | Aplicar filtros avançados combinados (datas, status, SLA, atendente) | @CEN-070..075, @CEN-070A, @CEN-079A |
 | E2E-08 | Criar atendimento (com e sem fila) | @CEN-080, @CEN-081 |
 | E2E-09 | Nova conversa: buscar contato → escolher canal → enviar 1ª mensagem | @CEN-090..093 |
 | E2E-10 | Abrir conversa → enviar em vários canais → nota interna | @CEN-101, @CEN-110, @CEN-111 |
@@ -392,6 +459,8 @@
 | E2E-30 | Snackbar: provocar erro → mensagem → fechar manual | @CEN-241, @CEN-243 |
 | E2E-31 | "Sem operação específica" → expandir → selecionar "Sem fila específica" → listar | @CEN-004, @CEN-004A |
 | E2E-32 | Configurações: ligar "Fechar conversas automaticamente" → conversa expira → conversa encerrada (atendimento intacto) | @CEN-178 |
+| E2E-33 | Filtros avançados: buscar por telefone / e-mail / CPF do contato (aplica ao sair do campo) → ver lista reduzida e chip | @CEN-078B..D, @CEN-078E, @CEN-079B |
+| E2E-34 | Filtros avançados: aplicar vários critérios → remover um pelo chip (X) → limpar todos (vassoura) | @CEN-079B, @CEN-079C, @CEN-079D |
 
 ---
 
@@ -418,6 +487,8 @@
 | NEG-17 | escolher destino "Sem fila específica" na transferência | abrir seletor | opção não aparece como destino | @CEN-004B |
 | NEG-18 | sort `mode=page` em uma fila com menos itens que o tamanho de página | aplicar | comportamento equivale a `all` (sem efeito visível) — não quebra | @CEN-251 |
 | NEG-19 | clique no ícone "Relatórios" (estado provisório) | clicar | nenhuma navegação ocorre; atendente segue na tela atual | @CEN-200A |
+| NEG-20 | filtros avançados que não casam nenhum atendimento | aplicar | lista vazia tratada (sem erro); chips permanecem para ajuste/limpeza | @CEN-079E |
+| NEG-21 | busca de telefone/CPF com máscara, pontuação e espaços | aplicar | casa por dígitos, ignorando a formatação | @CEN-078B, @CEN-078D |
 
 ---
 
@@ -449,7 +520,7 @@
 | Marcadores | @CEN-050..055 | UT-MARK-*, UT-SORT-01/02/08/09, INT-MK-*, E2E-23 |
 | Busca | @CEN-060..067 | UT-SRCH-*, E2E-06, NEG-01 |
 | Busca: loading e paginação | @CEN-068..069C | UT-PAG-*, INT-SRCH-20..25, INT-CFILT-*, E2E-19/20/21, NEG-16 |
-| Filtros avançados | @CEN-070..077 | INT-MFILT-*, E2E-07/22, NEG-09/14 |
+| Filtros avançados | @CEN-070..079E | UT-AFILT-*, INT-MFILT-*, INT-AFILT-*, E2E-07/22/33/34, NEG-09/14/20/21 |
 | Criar/editar | @CEN-080..083 | INT-CRT-*, NEG-03, E2E-08 |
 | Nova conversa | @CEN-090..093 | INT-CV-05, E2E-09 |
 | Conversa/thread | @CEN-100..104 | UT-MSG-*, INT-CV-01..04, NEG-04..06, E2E-10/11 |
