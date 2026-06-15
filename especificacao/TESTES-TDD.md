@@ -174,6 +174,62 @@
 | UT-AFILT-14 | opção "Todos" marcada em um grupo | resolver predicado do grupo | grupo não restringe (equivale a sem filtro) |
 | UT-AFILT-15 | nenhum critério ativo | aplicar | lista inalterada (todos os atendimentos da fila) |
 
+### 1.13 Range picker de data — máquina de seleção  ·  ref @CEN-300..305
+
+> Lógica pura do `FilterData` (Jornadas). Determinística. `Date`s tratadas
+> como triplas `{y, m, d}`; comparação por valor numérico `y*10000+m*100+d`.
+
+| ID | Preparar | Executar | Verificar |
+|---|---|---|---|
+| UT-RANGE-01 | sem range | clicar dia X | início = X, fim = vazio |
+| UT-RANGE-02 | início = X, fim = vazio | clicar Y > X | início = X, fim = Y |
+| UT-RANGE-03 | início = X, fim = vazio | clicar Y < X | início = Y, fim = vazio (reset) |
+| UT-RANGE-04 | início = X, fim = Y | clicar Z | início = Z, fim = vazio (novo ciclo) |
+| UT-RANGE-05 | início = X, fim = vazio | hover Y >= X | previewEnd = Y; effectiveEnd = Y |
+| UT-RANGE-06 | início = X, fim = vazio | hover Y < X | previewEnd = null; effectiveEnd = null |
+| UT-RANGE-07 | mouse sai do calendário | observar | previewEnd zerado |
+| UT-RANGE-08 | data `{2026, 5, 15}` | formatar BR | `"15/06/2026"` |
+| UT-RANGE-09 | string `"2026-06-15"` | parse ISO | `{y:2026, m:5, d:15}` |
+| UT-RANGE-10 | range completo | limpar | início = "", fim = "" |
+| UT-RANGE-11 | escolher preset "Hoje" | observar | dataPadrao = "hoje"; início/fim vazios |
+| UT-RANGE-12 | escolher preset com range já definido | observar | range é descartado (sobrescrito pelo preset) |
+
+### 1.14 Chip input multi-valor — máquina de inserção/remoção  ·  ref @CEN-310..317
+
+> Lógica pura do `FilterChipsInput`. Determinística. Estado interno =
+> array de strings.
+
+| ID | Preparar | Executar | Verificar |
+|---|---|---|---|
+| UT-CHIP-01 | valores `[]`, input `"abc"` | Enter | valores = `["abc"]`; input = "" |
+| UT-CHIP-02 | valores `["abc"]`, input `"def"` | Enter | valores = `["abc", "def"]` |
+| UT-CHIP-03 | valores `[]`, input `"abc"` | vírgula | valores = `["abc"]`; input = "" |
+| UT-CHIP-04 | valores `[]`, input `"abc"` | ponto-e-vírgula | valores = `["abc"]`; input = "" |
+| UT-CHIP-05 | valores `["abc"]`, input `"abc"` | Enter | valores INALTERADOS; input = "" |
+| UT-CHIP-06 | valores `["abc", "def"]`, input vazio | Backspace | valores = `["abc"]` (remove o último) |
+| UT-CHIP-07 | valores `["abc"]`, input `"x"` | Backspace | valores = `["abc"]`; input = "" (comportamento padrão do textarea) |
+| UT-CHIP-08 | valores `["abc", "def"]` | remover "abc" via X individual | valores = `["def"]` |
+| UT-CHIP-09 | valores `["abc"]`, vassoura da categoria | acionar | valores = `[]` |
+| UT-CHIP-10 | input apenas com espaços | Enter | NENHUM chip adicionado; input não limpo |
+| UT-CHIP-11 | input `" abc "` (com espaços nas pontas) | Enter | valor armazenado = `"abc"` (trim) |
+| UT-CHIP-12 | input não vazio + não duplicado | observar | chip rascunho com texto "Adicionar '<valor>'" é exibido |
+| UT-CHIP-13 | input não vazio + duplicado | observar | chip rascunho NÃO é exibido; mensagem "'X' já está aplicado" aparece |
+
+### 1.15 Contagem de categorias com filtro aplicado  ·  ref @CEN-298
+
+> `countJornadaFilterCategories`: cada categoria conta como 1
+> independente do número de sub-itens.
+
+| ID | Preparar | Executar | Verificar |
+|---|---|---|---|
+| UT-FCAT-01 | filtros vazios (EMPTY_JORNADA_FILTERS) | contar | 0 |
+| UT-FCAT-02 | 3 jornadas + 2 status | contar | 2 (Jornada=1 + Status=1) |
+| UT-FCAT-03 | 1 dataPadrao | contar | 1 |
+| UT-FCAT-04 | 1 dataInicio + 1 dataFim | contar | 1 (mesma categoria "data") |
+| UT-FCAT-05 | dataPadrao + dataInicio | contar | 1 (mesma categoria) |
+| UT-FCAT-06 | telefone com 5 valores | contar | 1 |
+| UT-FCAT-07 | 1 valor em cada uma das 9 categorias | contar | 9 |
+
 ---
 
 ## 2. Testes de integração / domínio (`INT-`)
@@ -273,13 +329,78 @@
 | INT-CFG-06 | "Troca de produto = mesma conversa" | trocar produto | diálogo mantido na conversa atual |
 | INT-CFG-07 | salvar configurações | persistir | parâmetros mantidos e aplicados aos próximos atendimentos |
 
-### 2.11 Jornadas e Dashboard  ·  ref @CEN-180..182, @CEN-190..195
+### 2.11 Jornadas — listagem e transferência  ·  ref @CEN-180..182, @CEN-280..286
 
 | ID | Preparar | Executar | Verificar |
 |---|---|---|---|
 | INT-JOR-01 | conversas de jornada | listar | nome da jornada, contato, canal, prévia e não-lidas corretos |
 | INT-JOR-02 | filtros de jornada | aplicar | lista refinada pelos critérios |
 | INT-JOR-03 | conversa de jornada | "Transferir essa conversa" | passa a ser conduzida por atendente |
+| INT-JOR-04 | sidebar com lista de jornadas | observar | NÃO existe campo de busca de texto na sidebar |
+| INT-JOR-05 | tooltip sobre `#<id>` em card OU header da thread | hover | apresenta "ID do acionamento da jornada" |
+| INT-JOR-06 | card de jornada | observar conteúdo | id+hash, ícone do canal, hora, jornada (com avatar), contato (com tag), prévia, badge unread |
+| INT-JOR-07 | nenhum filtro aplicado | observar botão da sidebar | ícone funil simples (sem badge) |
+| INT-JOR-08 | 1 filtro aplicado | observar botão | pílula "1 filtro aplicado" + vassoura |
+| INT-JOR-09 | 2 filtros aplicados | observar botão | pílula "2 filtros aplicados" + vassoura |
+| INT-JOR-10 | pílula visível | clicar na parte do texto | modal abre com filtros pré-aplicados |
+| INT-JOR-11 | pílula visível | clicar na vassoura | filtros zerados; modal NÃO abre; sidebar volta ao funil simples |
+
+### 2.11B Jornadas — modal de filtros (estrutura e ações)  ·  ref @CEN-290..298
+
+| ID | Preparar | Executar | Verificar |
+|---|---|---|---|
+| INT-JMF-01 | rascunho com 1 valor por categoria, 8 categorias | observar painel esquerdo | cada categoria exibe 1 chip do valor |
+| INT-JMF-02 | rascunho com 3 jornadas selecionadas | observar painel esquerdo | 3 chips na categoria "Jornada"; X individual remove só 1 |
+| INT-JMF-03 | rascunho vazio | observar botão "Aplicar filtros" | desabilitado |
+| INT-JMF-04 | rascunho com pelo menos 1 valor | observar botão "Aplicar filtros" | habilitado |
+| INT-JMF-05 | rascunho válido | clicar em "Aplicar filtros" | filtros persistidos; modal fechado; lista refinada |
+| INT-JMF-06 | modal aberto | pressionar Esc | modal fecha sem persistir; filtros anteriores preservados |
+| INT-JMF-07 | modal aberto | clicar fora da caixa | mesma coisa que Esc |
+| INT-JMF-08 | filtros aplicados previamente | reabrir modal | rascunho inicial = filtros aplicados |
+| INT-JMF-09 | rascunho com filtros | vassoura do painel esquerdo (topo) | rascunho zerado; modal permanece aberto |
+| INT-JMF-10 | categoria com valor + outra categoria com valor | vassoura ao lado do título de uma categoria | só esta categoria é zerada; a outra permanece |
+
+### 2.11C Jornadas — sidebar colapsável  ·  ref @CEN-330..333
+
+| ID | Preparar | Executar | Verificar |
+|---|---|---|---|
+| INT-JCO-01 | sidebar visível | clicar "Expandir" no sub-header do panel | sidebar é desmontada do DOM; thread ocupa largura cheia; ícone vira "X"; tooltip "Recolher" |
+| INT-JCO-02 | sidebar colapsada | clicar "Recolher" | sidebar é remontada; ícone volta a "Expandir"; tooltip "Expandir" |
+| INT-JCO-03 | jornada A selecionada | colapsar + restaurar | a mesma jornada A continua selecionada (estado preservado) |
+| INT-JCO-04 | sub-header do JornadasPanel | observar | botões antigos "Ver conversas" e "Marcadores" foram REMOVIDOS — só o toggle expand/recolher permanece |
+
+### 2.11D Jornadas — range picker no filtro "Data"  ·  ref @CEN-300..305
+
+| ID | Preparar | Executar | Verificar |
+|---|---|---|---|
+| INT-JRP-01 | calendário sem range, dia X clicado | observar | dia X destacado como início (primary sólido) |
+| INT-JRP-02 | início = X, click Y > X | observar | dias entre X e Y com fundo lightest; X e Y com fundo primary sólido |
+| INT-JRP-03 | início = X, hover Y > X | observar | preview do range (mesma renderização que o range fixo) |
+| INT-JRP-04 | range completo + click "Limpar" | observar | dataInicio = "" e dataFim = "" |
+| INT-JRP-05 | range completo + escolher preset "30 dias" | observar | range descartado; dataPadrao = "30d" |
+| INT-JRP-06 | "Período personalizado" escolhido sem range | observar | calendário visível; resumo "..." (placeholder) |
+| INT-JRP-07 | data persistida | conferir formato | string ISO "YYYY-MM-DD" |
+
+### 2.11E Jornadas — chip input multi-valor  ·  ref @CEN-310..317
+
+| ID | Preparar | Executar | Verificar |
+|---|---|---|---|
+| INT-JCI-01 | categoria "Telefone" aberta, input com valor | Enter | chip aplicado adicionado abaixo do input |
+| INT-JCI-02 | mesmo estado | vírgula | mesma coisa que Enter |
+| INT-JCI-03 | mesmo estado | ponto-e-vírgula | mesma coisa que Enter |
+| INT-JCI-04 | valor já aplicado | Enter de novo | nenhum chip novo; hint "já aplicado" exibido |
+| INT-JCI-05 | input com valor não-vazio | observar | chip rascunho tracejado "Adicionar '<valor>'" visível |
+| INT-JCI-06 | input com valor já aplicado | observar | chip rascunho NÃO exibido |
+| INT-JCI-07 | chips aplicados | clicar X individual | só aquele chip removido |
+| INT-JCI-08 | chips aplicados + input vazio | Backspace | último chip removido |
+| INT-JCI-09 | categoria com N chips | clicar vassoura ao lado do título | todos os N chips removidos; outras categorias intactas |
+| INT-JCI-10 | input após adicionar chip | foco | input continua focado |
+| INT-JCI-11 | aplicado em "Status da conversa" | observar | mesmo padrão de chips se aplica (Aberto, Encerrado, Pendente como checkbox multi) |
+
+### 2.11F Dashboard  ·  ref @CEN-190..195
+
+| ID | Preparar | Executar | Verificar |
+|---|---|---|---|
 | INT-DSH-01 | base de conversas/mensagens | calcular KPIs | total de conversas, TMA, TME, aguardando, em atendimento, concluídas, sessões, total de mensagens corretos |
 | INT-DSH-02 | filtro de período | recalcular | KPIs recalculados para o período |
 | INT-DSH-03 | distribuição por canal/atendente | agregar | números coerentes com a base |
@@ -444,6 +565,12 @@
 | E2E-15 | Transferir por I.A. em "Sem fila" → confirmar → ver marcação e total | @CEN-160..163 |
 | E2E-16 | Editar configurações do chat → salvar → validar efeito | @CEN-170..177 |
 | E2E-17 | Jornadas: listar → filtrar → transferir conversa | @CEN-180..182 |
+| E2E-17A | Jornadas: abrir modal → aplicar filtro de data range (preset OU range customizado) → ver pílula "1 filtro aplicado" → reabrir modal preservando estado | @CEN-181, @CEN-282, @CEN-297 |
+| E2E-17B | Jornadas: input multi-valor → 3 valores via Enter + vírgula + ponto-e-vírgula → remover 1 chip individual → vassoura por categoria limpa o resto | @CEN-310..317 |
+| E2E-17C | Jornadas: aplicar 2 filtros → vassoura da pílula da sidebar limpa todos sem abrir modal | @CEN-283 |
+| E2E-17D | Jornadas: range picker — click início + hover preview + click fim + Limpar → ver visual contínuo | @CEN-300..303 |
+| E2E-17E | Jornadas: colapsar sidebar via expand → restaurar via X → jornada selecionada permanece | @CEN-330..333 |
+| E2E-17F | Jornadas: Status como multi-select → marcar "Aberto" + "Pendente" → 2 chips na sidebar do modal | @CEN-320..322 |
 | E2E-18 | Dashboard: KPIs → filtrar período → exportar | @CEN-190..195 |
 | E2E-19 | Pesquisa: digitar termo → skeleton → recentes (últimos 30 dias) → loading-more → completo com paginação | @CEN-068..069C |
 | E2E-20 | Pesquisa: filtrar pelos atendimentos de um contato (funil) → limpar (toggle) | @CEN-068F, @CEN-068G |
@@ -487,6 +614,11 @@
 | NEG-17 | escolher destino "Sem fila específica" na transferência | abrir seletor | opção não aparece como destino | @CEN-004B |
 | NEG-18 | sort `mode=page` em uma fila com menos itens que o tamanho de página | aplicar | comportamento equivale a `all` (sem efeito visível) — não quebra | @CEN-251 |
 | NEG-19 | clique no ícone "Relatórios" (estado provisório) | clicar | nenhuma navegação ocorre; atendente segue na tela atual | @CEN-200A |
+| NEG-30 | input de chip apenas com espaços | Enter | nenhum chip adicionado; estado preservado | @CEN-310 |
+| NEG-31 | input de chip com valor duplicado | Enter | nenhum chip; hint "X já está aplicado" | @CEN-312 |
+| NEG-32 | range picker — clique 2 antes do início | clicar | início é resetado; fim continua vazio | @CEN-300 |
+| NEG-33 | reabrir modal de filtros sem ter aplicado nada | observar rascunho inicial | igual ao EMPTY_JORNADA_FILTERS (todas as categorias vazias/`[]`/`null`) | @CEN-297 |
+| NEG-34 | clicar X em um chip de jornada quando há 1 só | observar | categoria fica vazia; pílula da sidebar atualiza para "N-1 filtros aplicados" | @CEN-291 |
 | NEG-20 | filtros avançados que não casam nenhum atendimento | aplicar | lista vazia tratada (sem erro); chips permanecem para ajuste/limpeza | @CEN-079E |
 | NEG-21 | busca de telefone/CPF com máscara, pontuação e espaços | aplicar | casa por dígitos, ignorando a formatação | @CEN-078B, @CEN-078D |
 
@@ -531,7 +663,13 @@
 | Histórico do contato | @CEN-150..154 | INT-HC-*, E2E-14 |
 | I.A. | @CEN-160..163 | INT-IA-*, NEG-07, E2E-15 |
 | Configurações | @CEN-170..178 | INT-CFG-*, E2E-16/32, NF-SEC-02 |
-| Jornadas | @CEN-180..182 | INT-JOR-*, E2E-17 |
+| Jornadas — listagem e transferência | @CEN-180..182, @CEN-280..286 | INT-JOR-*, E2E-17 |
+| Jornadas — modal de filtros | @CEN-290..298 | INT-JMF-*, E2E-17A, NEG-33/34 |
+| Jornadas — range picker | @CEN-300..305 | UT-RANGE-*, INT-JRP-*, E2E-17D, NEG-32 |
+| Jornadas — chip input multi-valor | @CEN-310..317 | UT-CHIP-*, INT-JCI-*, E2E-17B, NEG-30/31 |
+| Jornadas — Status multi-select | @CEN-320..322 | E2E-17F |
+| Jornadas — sidebar colapsável | @CEN-330..333 | INT-JCO-*, E2E-17E |
+| Contagem por categoria | @CEN-298 | UT-FCAT-* |
 | Dashboard | @CEN-190..195 | INT-DSH-*, E2E-18 |
 | Navegação | @CEN-200..201 | E2E-01, NEG-19 |
 | Vincular conversa | @CEN-210..216 | INT-LINK-*, E2E-25/26, NEG-11/15 |

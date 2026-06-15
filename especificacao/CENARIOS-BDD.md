@@ -1123,6 +1123,7 @@ Funcionalidade: Acompanhar conversas conduzidas por jornada
     Quando o atendente filtra por data, telefone, e-mail, jornada,
       identificadores (acionamento/conversa/atendimento) ou status
     Então a lista é refinada conforme os critérios
+    # O fluxo detalhado do modal está em §28..§31.
 
   @CEN-182
   Cenário: Transferir conversa de jornada para atendimento humano
@@ -1130,6 +1131,11 @@ Funcionalidade: Acompanhar conversas conduzidas por jornada
     Quando o atendente opta por "Transferir essa conversa"
     Então a conversa passa a ser conduzida por um atendente
 ```
+
+> A partir daqui (§28..§33) detalham-se as regras observáveis introduzidas
+> no refactor da tela de Jornadas — escopo principalmente Front-end, mas
+> com implicações de **contrato de filtros** para o Back-end (categorias
+> multi-valor, formato de data e operações de "limpar").
 
 ---
 
@@ -1517,6 +1523,378 @@ Funcionalidade: Visualizar atendimentos em uma linha do tempo (Gantt)
 
 ---
 
+# 28. Sidebar de Jornadas — header e cards
+
+```gherkin
+Funcionalidade: Listar conversas de jornada de forma consistente com o
+  detalhe de atendimento
+  Como atendente, quero reconhecer o padrão visual e a interação dos
+  cards da sidebar de Jornadas como sendo o mesmo do detalhe de
+  atendimento (consistência cross-tela).
+
+  @CEN-280
+  Cenário: Sidebar sem campo de busca de texto
+    Dado que a sidebar de Jornadas está aberta
+    Então NÃO existe um campo "Pesquisar" na sidebar
+    E a única forma de buscar por texto (telefone/e-mail/identificadores)
+      é abrindo o modal de filtros
+
+  @CEN-281
+  Cenário: Botão de filtro inativo é apenas um ícone funil
+    Dado que nenhum filtro foi aplicado
+    Então o botão à direita do título "Jornadas" é um ícone funil
+      sem badge
+    Quando o atendente clica nele
+    Então o modal de filtros é aberto
+
+  @CEN-282
+  Cenário: Botão de filtro ativo vira pílula "N filtros aplicados"
+    Dado que pelo menos um filtro está aplicado
+    Então o botão é apresentado como uma pílula contendo:
+      o ícone funil, o texto "N filtros aplicados" (ou "1 filtro aplicado")
+      e um ícone de vassoura à direita
+    E o texto deve respeitar singular/plural conforme N
+
+  @CEN-283
+  Cenário: Cliques distintos na pílula
+    Dado que a pílula "N filtros aplicados" está visível
+    Quando o atendente clica na parte da contagem (à esquerda)
+    Então o modal de filtros é reaberto, preservando os filtros aplicados
+    Quando o atendente clica no ícone de vassoura (à direita)
+    Então TODOS os filtros são removidos
+    E o modal NÃO é aberto
+    E a sidebar volta a exibir o ícone funil sem badge
+
+  @CEN-284
+  Cenário: Card da jornada com tooltip "ID do acionamento da jornada"
+    Dado um card na lista
+    Quando o atendente passa o mouse sobre o "# <id>" do card
+    Então o sistema apresenta um tooltip "ID do acionamento da jornada"
+
+  @CEN-285
+  Cenário: Tooltip "ID do acionamento da jornada" também no painel direito
+    Dado que uma jornada está selecionada e a thread está aberta à direita
+    Quando o atendente passa o mouse sobre o "# <id>" no sub-header da thread
+    Então o mesmo tooltip "ID do acionamento da jornada" é apresentado
+
+  @CEN-286
+  Cenário: Conteúdo do card da jornada
+    Então cada card exibe:
+      • ID do acionamento (com hash)
+      • Ícone do canal da jornada
+      • Data/hora do último acionamento
+      • "Jornada: <nome>" (com avatar da jornada quando aplicável)
+      • "Contato: <email>" (com tag de iniciais)
+      • Prévia da última mensagem
+      • Quantidade de mensagens não lidas (badge)
+```
+
+---
+
+# 29. Modal de filtros de Jornadas — estrutura e ações
+
+```gherkin
+Funcionalidade: Editar e aplicar filtros da listagem de Jornadas
+  Como atendente, quero combinar várias categorias de filtros antes de
+  aplicar à listagem.
+
+  Contexto:
+    Dado que o modal apresenta 8 categorias:
+      Data, Telefone, E-mail, Jornada, Identificador do acionamento,
+      Identificador da conversa, Status da conversa, Identificador do atendimento
+
+  @CEN-290
+  Cenário: Chips dos valores aplicados aparecem em cada categoria
+    Dado que uma categoria tem valor(es) aplicado(s) no rascunho
+    Quando o atendente vê a lista de categorias à esquerda do modal
+    Então a categoria exibe os chips dos valores correspondentes
+      (substituindo o "dot indicator" que existia antes)
+    E cada chip tem um X que remove apenas aquele valor
+
+  @CEN-291
+  Cenário: Categoria multi-valor com vários itens gera múltiplos chips
+    Dado que o atendente selecionou 3 jornadas
+    Quando ele vê a categoria "Jornada" na lista
+    Então 3 chips são exibidos (um por jornada)
+    E remover o X de um chip remove só aquela jornada do filtro
+
+  @CEN-292
+  Cenário: Vassoura no canto superior do painel esquerdo
+    Dado que existe pelo menos um filtro no rascunho
+    Quando o atendente clica no ícone de vassoura no canto superior
+      direito do painel "Filtros"
+    Então TODOS os filtros do rascunho são removidos
+    E o modal permanece aberto (não fecha nem persiste)
+
+  @CEN-293
+  Cenário: Vassoura por categoria no painel direito
+    Dado que a categoria selecionada tem pelo menos um valor
+    Quando o atendente clica no ícone de vassoura ao lado do título
+      da categoria
+    Então apenas os valores daquela categoria são removidos do rascunho
+    E o modal permanece aberto
+
+  @CEN-294
+  Cenário: Botão "Aplicar filtros" habilitado conforme rascunho
+    Quando o rascunho está vazio
+    Então o botão "Aplicar filtros" fica desabilitado
+    Quando ao menos uma categoria tem valor
+    Então o botão é habilitado
+
+  @CEN-295
+  Cenário: Aplicar persiste e fecha o modal
+    Dado que o rascunho contém valores válidos
+    Quando o atendente clica em "Aplicar filtros"
+    Então o sistema persiste os filtros do rascunho como filtros aplicados
+    E fecha o modal
+    E a listagem de jornadas é refinada conforme os filtros
+
+  @CEN-296
+  Cenário: Cancelar via X / clique fora / Esc
+    Quando o atendente clica no X do modal, clica fora dele ou
+      pressiona Esc
+    Então o modal é fechado sem persistir o rascunho
+    E os filtros aplicados anteriormente permanecem intactos
+
+  @CEN-297
+  Cenário: Reabrir o modal preserva os filtros aplicados
+    Dado que o atendente aplicou filtros anteriormente
+    Quando ele abre o modal novamente
+    Então o rascunho inicial é igual aos filtros aplicados
+    E os chips das categorias refletem o estado atual
+
+  @CEN-298
+  Cenário: Contagem por categoria é igual a 1 (cada categoria vale 1)
+    Dado que o atendente selecionou 3 jornadas e 1 status
+    Então a pílula da sidebar exibe "2 filtros aplicados"
+    # Mesmo padrão do "hasDraftFor" do modal: cada categoria conta como
+    # 1, independente de quantos sub-itens contém.
+```
+
+---
+
+# 30. Range picker de data no filtro "Data"
+
+```gherkin
+Funcionalidade: Selecionar um período (data inicial + data final)
+  Como atendente, quero escolher um intervalo de datas como filtro
+  de Data, com interação semelhante à de compra de passagem aérea.
+
+  Contexto:
+    Dado a categoria "Data" do modal de filtros
+    E que o atendente escolheu "Período personalizado" como preset
+    E que o calendário está sendo apresentado
+
+  @CEN-300
+  Esquema do Cenário: Sequência de cliques no calendário
+    Dado o estado inicial "<estado>"
+    Quando o atendente clica em "<data>"
+    Então o resultado é "<resultado>"
+
+    Exemplos:
+      | estado                                 | data           | resultado                                  |
+      | nenhuma data selecionada               | dia X           | início = X, fim = vazio                     |
+      | início = X, fim = vazio                | dia Y >= X      | início = X, fim = Y (range completo)        |
+      | início = X, fim = vazio                | dia Y <  X      | início = Y, fim = vazio (reset)             |
+      | range completo (início = X, fim = Y)   | dia Z           | início = Z, fim = vazio (novo ciclo)        |
+
+  @CEN-301
+  Cenário: Preview do range no hover (antes do fim ser confirmado)
+    Dado que o início foi definido mas o fim ainda não
+    Quando o atendente passa o mouse sobre uma data >= início
+    Então o sistema apresenta uma prévia visual do range
+      (entre início e a data sob o cursor)
+    Quando o mouse sai do calendário sem clicar
+    Então a prévia desaparece
+
+  @CEN-302
+  Cenário: Visual do range
+    Então os dias "início" e "fim" são representados com fundo primary
+      sólido
+    E os dias entre eles têm fundo "primary lightest" sem cantos
+      arredondados (contínuos)
+    E dias fora do mês visualmente atenuados (mas clicáveis para permitir
+      ranges que atravessam fronteiras de mês)
+
+  @CEN-303
+  Cenário: Resumo textual + botão "Limpar"
+    Dado que existe pelo menos a data de início selecionada
+    Então o sistema apresenta o resumo textual
+      "DD/MM/AA → DD/MM/AA" quando o fim estiver definido
+      ou "DD/MM/AA → selecione a data final" caso contrário
+    E um botão "Limpar" remove tanto o início quanto o fim
+
+  @CEN-304
+  Cenário: Presets de período rápido
+    Dado a lista de presets:
+      "Hoje", "Últimos 7 dias", "30 dias", "60 dias", "90 dias",
+      "Período personalizado"
+    Quando o atendente escolhe um preset diferente de "Período personalizado"
+    Então o sistema descarta qualquer início/fim do range
+    E aplica o preset selecionado como "dataPadrao"
+
+  @CEN-305
+  Cenário: Persistência de datas
+    Quando uma data é selecionada
+    Então o sistema persiste no formato "YYYY-MM-DD"
+    # Estável para comparação string e fácil conversão pelo Back-end.
+```
+
+---
+
+# 31. Filtros multi-valor com chips (FilterChipsInput)
+
+```gherkin
+Funcionalidade: Aplicar múltiplos valores em uma mesma categoria via chips
+  Como atendente, quero adicionar vários valores em filtros de texto
+  (telefones, e-mails, identificadores) sem precisar fechar o modal
+  entre cada um.
+
+  Contexto:
+    Dado as 5 categorias multi-valor:
+      Telefone, E-mail,
+      Identificador do acionamento, Identificador da conversa,
+      Identificador do atendimento
+    E que o Status da conversa também é multi-valor (Aberto, Encerrado,
+      Pendente) — vide §32
+
+  @CEN-310
+  Esquema do Cenário: Atalhos de inserção
+    Dado um valor digitado no input da categoria
+    Quando o atendente pressiona "<tecla>"
+    Então o valor é convertido em chip aplicado
+    E o input volta a ficar vazio com foco preservado
+
+    Exemplos:
+      | tecla        |
+      | Enter        |
+      | "," (vírgula)|
+      | ";" (ponto-e-vírgula) |
+
+  @CEN-311
+  Cenário: Chip rascunho enquanto digita
+    Dado que o atendente digitou um valor não duplicado
+    Então o sistema apresenta abaixo do input um "chip rascunho" tracejado
+      contendo o texto "Adicionar '<valor>'"
+    Quando o atendente clica nesse chip rascunho
+    Então o valor é convertido em chip aplicado (mesma ação que Enter)
+
+  @CEN-312
+  Cenário: Duplicatas são ignoradas
+    Dado que o valor "X" já está aplicado
+    Quando o atendente digita "X" e pressiona Enter
+    Então NENHUM novo chip é adicionado
+    E o sistema informa "'X' já está aplicado"
+    E o input é limpo
+
+  @CEN-313
+  Cenário: Backspace remove o último chip
+    Dado que existe pelo menos um chip aplicado
+    E que o input está vazio
+    Quando o atendente pressiona Backspace
+    Então o último chip aplicado é removido
+
+  @CEN-314
+  Cenário: Chips aplicados aparecem logo abaixo do input
+    Dado que existem chips aplicados
+    Então os chips aplicados são apresentados em uma fila horizontal
+      logo abaixo do input
+    E cada chip exibe o valor + um X para removê-lo individualmente
+
+  @CEN-315
+  Cenário: Vassoura por categoria limpa só esta categoria
+    Dado que existem chips aplicados
+    Quando o atendente clica no ícone de vassoura ao lado do título
+      da categoria (painel direito)
+    Então todos os chips daquela categoria são removidos do rascunho
+    E nenhum outro filtro de outra categoria é afetado
+
+  @CEN-316
+  Cenário: Foco do input após inserir um chip
+    Quando um chip é adicionado via Enter
+    Então o input continua focado, permitindo digitar o próximo valor
+
+  @CEN-317
+  Cenário: Modelo de dados das 5 categorias é array de strings
+    Então o estado interno do filtro armazena cada uma das 5 categorias
+      multi-valor como **array de strings** (vazio = filtro inativo)
+    # Implicação Back-end: o contrato de filtros precisa aceitar listas
+    # nessas categorias.
+```
+
+---
+
+# 32. Status da conversa como multi-select (alinhamento com Jornada)
+
+```gherkin
+Funcionalidade: Selecionar múltiplos status simultaneamente
+  Como atendente, quero filtrar pelas combinações de status que me
+  interessam (ex.: "Aberto" + "Pendente"), e não apenas um.
+
+  @CEN-320
+  Cenário: Status virou multi-select com busca
+    Dado a categoria "Status da conversa" do modal
+    Quando o atendente abre essa categoria
+    Então a apresentação usa o mesmo padrão da categoria "Jornada":
+      um input "Pesquise" + checkboxes para os itens
+      ["Aberto", "Encerrado", "Pendente"]
+    E o atendente pode marcar mais de um item simultaneamente
+
+  @CEN-321
+  Cenário: Chips de status na lista de categorias
+    Dado que o atendente selecionou "Aberto" e "Pendente"
+    Quando ele observa a categoria "Status da conversa" na lista à
+      esquerda do modal
+    Então dois chips são exibidos: "Aberto" e "Pendente"
+    E cada chip tem seu próprio X para remoção individual
+
+  @CEN-322
+  Cenário: Modelo de dados de status é array de strings
+    Então o estado interno de "status da conversa" é um array de strings
+    # Implicação Back-end: filtro de status precisa aceitar lista.
+```
+
+---
+
+# 33. Sidebar colapsável da tela de Jornadas
+
+```gherkin
+Funcionalidade: Maximizar a área da thread colapsando a lista lateral
+  Como atendente, quero ter mais espaço horizontal para a thread quando
+  estou focado em uma conversa específica.
+
+  @CEN-330
+  Cenário: Estado inicial — sidebar visível
+    Quando o atendente abre a tela de Jornadas
+    Então a sidebar da lista é apresentada
+    E o sub-header do painel direito mostra um botão com o ícone
+      "expandir" (ph-arrows-out) e tooltip "Expandir"
+
+  @CEN-331
+  Cenário: Colapsar a sidebar
+    Dado que a sidebar está visível
+    Quando o atendente clica no botão "Expandir" do sub-header
+    Então a sidebar de Jornadas é ocultada (desmontada do DOM, sem
+      deixar largura fantasma)
+    E o painel da thread ocupa a largura disponível
+    E o botão passa a exibir o ícone "X" (ph-x) com tooltip "Recolher"
+
+  @CEN-332
+  Cenário: Restaurar a sidebar
+    Dado que a sidebar está colapsada
+    Quando o atendente clica no botão "Recolher"
+    Então a sidebar volta a ser renderizada
+    E o botão volta ao ícone "Expandir"
+
+  @CEN-333
+  Cenário: Estado da seleção é preservado durante o colapso
+    Dado que uma jornada estava selecionada
+    Quando o atendente colapsa e depois restaura a sidebar
+    Então a mesma jornada continua selecionada (active = id anterior)
+```
+
+---
+
 ## Observações finais para o Back-end
 
 - **Roteamento atendimento → fila:** no protótipo a associação é simulada; no sistema
@@ -1561,6 +1939,19 @@ Funcionalidade: Visualizar atendimentos em uma linha do tempo (Gantt)
 - **Filtro de Marcadores (§8 CEN-076):** a lista de marcadores disponíveis para o
   filtro deve ser derivada dos marcadores efetivamente em uso (ou de um catálogo
   persistido, conforme decisão de produto).
+- **Contrato de filtros de Jornadas (§29..§32):** todas as categorias do modal
+  precisam aceitar **listas** (mesmo as "single-value" históricas viraram
+  arrays):
+  - `data`: combinação `dataPadrao` (preset string ou null) + `dataInicio`
+    + `dataFim` (ambas `YYYY-MM-DD` ou strings vazias)
+  - `telefone`, `email`, `idAci`, `idConv`, `idAte`: arrays de strings
+  - `jornadas`: array de strings (nomes de jornada)
+  - `pendencias` (status): array de strings (ex.: `["Aberto", "Pendente"]`)
+  - "Limpar" envia o estado vazio padronizado (`EMPTY_JORNADA_FILTERS`)
+- **Range picker (§30):** o intervalo é persistido como duas datas ISO
+  (`YYYY-MM-DD`). Quando o usuário escolhe um preset (`hoje`, `7d`, `30d`,
+  `60d`, `90d`), o `dataInicio`/`dataFim` ficam vazios e o back-end deve
+  resolver o intervalo a partir do preset + data/hora do servidor.
 - **Sort unificado (§26):** o back-end deve suportar quatro chaves de ordenação
   (marcador, dataInicio, dataAtualizacao, sla) com direção `asc`/`desc`. O escopo
   "página" pode ser implementado client-side; "todos" exige reordenação do dataset
