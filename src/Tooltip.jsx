@@ -146,7 +146,11 @@ const CCMTooltip = ({ children, label, placement = "bottom", disabled = false, d
             background: "#28293d", color: "#fff",
             padding: "6px 10px", borderRadius: 6,
             fontSize: 12, fontWeight: 500, lineHeight: 1.4,
-            whiteSpace: "nowrap",
+            // Textos longos quebram dentro do maxWidth em vez de
+            // vazarem pra fora do fundo escuro. Textos curtos seguem
+            // em uma linha só naturalmente.
+            whiteSpace: "normal",
+            wordBreak: "break-word",
             boxShadow: "0 4px 12px rgba(40,41,61,0.18)",
             pointerEvents: "none",
             zIndex: 10002,
