@@ -126,6 +126,12 @@ const AtendimentosList = ({
   // Favoritos e SLA são opções mutuamente exclusivas do segmented control.
   const favoritesOnly = viewScope === "favorites";
   const isSlaMode = viewScope === "sla";
+  // "Landing" do modo favoritos: usuário acabou de clicar na estrela mas
+  // ainda não favoritou nada. Neste estado o breadcrumb não tem caminho
+  // (substituído por um título "Favoritos") e a área principal mostra o
+  // empty state explicativo. Após existir ao menos 1 favorito, a UI
+  // volta ao comportamento normal por fila.
+  const noFavoritesYet = favoritesOnly && favoritedIds && favoritedIds.size === 0;
   const c = window.CCM.c;
   const D = window.CCM_DATA;
   const demo = window.CCM_DEMO_STATE || {};
@@ -382,7 +388,8 @@ const AtendimentosList = ({
           display: "flex", alignItems: "center", justifyContent: "space-between",
           gap: 16,
         }}>
-          {/* Breadcrumb — esconde no modo SLA (view global cross-fila) e mostra
+          {/* Breadcrumb — esconde no modo SLA (view global cross-fila) e
+              também no "landing" de Favoritos sem favoritos ainda, mostrando
               um título dedicado no lugar. */}
           <div style={{ minWidth: 0, flex: 1 }}>
             {isSlaMode ? (
@@ -396,6 +403,18 @@ const AtendimentosList = ({
                   fontSize: 10, fontWeight: 700, padding: "3px 8px", borderRadius: 999,
                   textTransform: "uppercase", letterSpacing: "0.04em",
                 }}>visão global</span>
+              </div>
+            ) : noFavoritesYet ? (
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <i className="ph-fill ph-star" style={{ fontSize: 20, color: "#f5a623" }} />
+                <span style={{ fontSize: 15, fontWeight: 700, color: c.fg1 }}>
+                  Favoritos
+                </span>
+                <span style={{
+                  background: "#fff4e0", color: "#a8660a",
+                  fontSize: 10, fontWeight: 700, padding: "3px 8px", borderRadius: 999,
+                  textTransform: "uppercase", letterSpacing: "0.04em",
+                }}>sem favoritos</span>
               </div>
             ) : (
               <QueueBreadcrumb queue={queue} queues={queues} onSelectQueue={onSelectQueue} />
@@ -572,7 +591,7 @@ const AtendimentosList = ({
 
           {/* ── Scrollable table (both axes) ── */}
           <div style={{ flex: 1, overflow: "auto", minHeight: 0 }}>
-            {demo.loadingTable ? <LoadingSkeleton /> : (demo.emptyQueue || displayedAtendimentos.length === 0) ? <EmptyState /> : (
+            {demo.loadingTable ? <LoadingSkeleton /> : (demo.emptyQueue || displayedAtendimentos.length === 0) ? <EmptyState favoritesOnly={noFavoritesYet} /> : (
             <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 960 }}>
               <thead>
                 <tr style={{ background: "#fafbfd", position: "sticky", top: 0, zIndex: 3 }}>
@@ -582,7 +601,6 @@ const AtendimentosList = ({
                       { label: "ID" },
                       // No modo SLA, SLA vai pra 2ª coluna (logo após ID) e some do final
                       ...(isSlaMode ? [slaCol] : []),
-                      { label: "Nome" },
                       ...(isSlaMode ? [
                         { label: "Operação" },
                         { label: "Fila" },
@@ -668,7 +686,6 @@ const AtendimentosList = ({
                         </span>
                       </td>
                       {isSlaMode && slaTd}
-                      <td style={{ padding: "12px 16px", fontSize: 13, color: c.fg1, maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.titulo.split("—")[0].trim()}</td>
                       {isSlaMode && (() => {
                         const chain = window.CCM.queueChainForAtendimento(a.id, D.queues);
                         const op = chain?.operacao;
@@ -2000,10 +2017,49 @@ const LoadingSkeleton = () => {
 };
 
 // ─────────────────────────────────────────────
-// EmptyState — shown when ?demo=empty (no atendimentos in selected queue)
+// EmptyState — shown when there are no atendimentos to display.
+// Tem 2 variantes:
+//   • favoritesOnly = true  → "Nenhum favorito ainda" + hint pra clicar
+//                              na estrela em um atendimento da lista
+//   • caso contrário        → "Nenhum atendimento nesta fila" + CTA
+//                              de criar atendimento manual (default)
 // ─────────────────────────────────────────────
-const EmptyState = () => {
+const EmptyState = ({ favoritesOnly = false }) => {
   const c = window.CCM.c;
+
+  if (favoritesOnly) {
+    // Cor da estrela favorita = #f5a623 (mesmo tom do segmented control)
+    const starColor = "#f5a623";
+    const starBg = "#fff4e0";
+    return (
+      <div style={{
+        flex: 1, height: "100%",
+        display: "flex", flexDirection: "column",
+        alignItems: "center", justifyContent: "center",
+        padding: 48, textAlign: "center",
+      }}>
+        <div style={{
+          width: 72, height: 72, borderRadius: "50%",
+          background: starBg, color: starColor,
+          display: "flex", alignItems: "center", justifyContent: "center",
+          marginBottom: 18,
+        }}>
+          <i className="ph-fill ph-star" style={{ fontSize: 32 }} />
+        </div>
+        <div style={{ fontSize: 16, fontWeight: 600, color: c.fg1, marginBottom: 6 }}>
+          Nenhum favorito ainda
+        </div>
+        <div style={{ fontSize: 13, color: c.fg2, maxWidth: 360, lineHeight: 1.5 }}>
+          Para favoritar um atendimento, clique no ícone de
+          {" "}
+          <i className="ph ph-star" style={{ fontSize: 14, color: starColor, verticalAlign: "middle", margin: "0 2px" }} />
+          {" "}
+          estrela na linha desejada da lista. Os atendimentos favoritos aparecerão aqui.
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={{
       flex: 1, height: "100%",

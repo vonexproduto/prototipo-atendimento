@@ -252,6 +252,56 @@ const QueuesTree = ({
     );
   }
 
+  // Landing de Favoritos sem nada favoritado — esconde a árvore de filas
+  // inteira e mostra um empty state explicativo no lugar.
+  const noFavoritesYet = favoritesOnly && favoritedIds && favoritedIds.size === 0;
+  if (noFavoritesYet) {
+    const c = window.CCM.c;
+    const starColor = "#f5a623";
+    const starBg = "#fff4e0";
+    return (
+      <div style={{
+        flex: 1, display: "flex", flexDirection: "column",
+        alignItems: "center", justifyContent: "center",
+        padding: "24px 20px", textAlign: "center", gap: 12,
+      }}>
+        <div style={{
+          width: 52, height: 52, borderRadius: "50%",
+          background: starBg, color: starColor,
+          display: "flex", alignItems: "center", justifyContent: "center",
+        }}>
+          <i className="ph-fill ph-star" style={{ fontSize: 22 }} />
+        </div>
+        <div style={{ fontSize: 13, fontWeight: 600, color: c.fg1 }}>
+          Suas filas favoritas
+          <br />aparecerão aqui
+        </div>
+        <div style={{ fontSize: 11, color: c.fg2, lineHeight: 1.5, maxWidth: 240 }}>
+          Para favoritar atendimentos, troque para
+          {" "}
+          <span style={{
+            display: "inline-flex", alignItems: "center", gap: 3,
+            background: c.borderSoft, color: c.fg1,
+            fontWeight: 600, padding: "1px 6px", borderRadius: 4,
+            verticalAlign: "middle",
+          }}>
+            <i className="ph ph-user" style={{ fontSize: 10 }} /> Meus
+          </span>
+          {" "}ou{" "}
+          <span style={{
+            display: "inline-flex", alignItems: "center", gap: 3,
+            background: c.borderSoft, color: c.fg1,
+            fontWeight: 600, padding: "1px 6px", borderRadius: 4,
+            verticalAlign: "middle",
+          }}>
+            <i className="ph ph-users" style={{ fontSize: 10 }} /> Todos
+          </span>
+          {" "}no topo.
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={{ flex: 1, overflowY: "auto", padding: "0 8px 16px" }}>
       {visibleQueues.map(q => (
