@@ -160,35 +160,48 @@ const StandaloneComposer = ({ channel, onChannelChange }) => {
   const emojiWrapRef = React.useRef(null);
   const dropdownWrapRef = React.useRef(null);
   const textareaRef = React.useRef(null);
+  const outerRef = React.useRef(null);
 
-  // Auto-resize do textarea: começa em 1 linha e cresce conforme o
-  // usuário digita, até MAX_TEXTAREA_H. Depois disso vira scroll interno.
-  // Se textareaH está setado (via arrasto manual), aplica ele direto e
-  // ignora o auto-resize baseado no conteúdo.
-  const MAX_TEXTAREA_H = 160;
+  // Altura máxima do textarea = ~50% da "seção" (o painel que contém
+  // header + thread + composer), descontando o cromo do composer (tabs +
+  // banner + action row). Assim tanto o crescimento por conteúdo quanto o
+  // arrasto manual param quando a área chega a metade da seção. Piso de
+  // 120px pra telas baixas.
+  const RESIZE_MIN = 40;
+  const COMPOSER_CHROME = 100;
+  const getMaxTextareaH = () => {
+    const section = outerRef.current?.parentElement?.offsetHeight || window.innerHeight;
+    return Math.max(120, Math.floor(section * 0.5) - COMPOSER_CHROME);
+  };
+
+  // Resize do textarea:
+  //   • textareaH === null → auto-resize por conteúdo (1 linha vazio,
+  //     cresce com o texto), capado em getMaxTextareaH(). Depois vira
+  //     scroll interno.
+  //   • textareaH !== null → altura fixa definida pelo arrasto manual,
+  //     também capada no máximo.
   React.useLayoutEffect(() => {
     const el = textareaRef.current;
     if (!el) return;
+    const max = getMaxTextareaH();
     if (textareaH !== null) {
-      el.style.height = textareaH + "px";
+      el.style.height = Math.min(textareaH, max) + "px";
     } else {
       el.style.height = "auto";
-      el.style.height = Math.min(el.scrollHeight, MAX_TEXTAREA_H) + "px";
+      el.style.height = Math.min(el.scrollHeight, max) + "px";
     }
   });
 
   // Início do drag da borda superior do composer. Funciona pinned ou não —
-  // pin é responsabilidade separada (só desativa o auto-hide). Se cair
-  // abaixo do RESIZE_MIN, volta ao auto-resize (textareaH = null) e
-  // desafixa se estava fixo. O máximo é calculado no momento do drag:
-  // metade da altura do viewport menos o espaço do banner + action row.
-  const RESIZE_MIN = 40;
+  // pin é responsabilidade separada (só desativa o auto-hide). Funciona
+  // mesmo com o textarea vazio (parte da altura atual). Se cair abaixo do
+  // RESIZE_MIN, volta ao auto-resize (textareaH = null) e desafixa.
   const startResize = (e) => {
     e.preventDefault();
     setDragging(true);
     const startY = e.clientY;
-    const startH = textareaH !== null ? textareaH : (textareaRef.current?.offsetHeight || MAX_TEXTAREA_H);
-    const RESIZE_MAX = Math.floor(window.innerHeight * 0.5) - 60;
+    const startH = textareaH !== null ? textareaH : (textareaRef.current?.offsetHeight || 36);
+    const RESIZE_MAX = getMaxTextareaH();
     const onMove = (mv) => {
       const dy = startY - mv.clientY;
       const next = startH + dy;
@@ -641,16 +654,16 @@ const StandaloneComposer = ({ channel, onChannelChange }) => {
 
   // ── Conteúdo (por canal) ───────────────────────────────────────────
   //   background pode ser sobrescrito por canal (bege na Nota interna).
-  //   Começa com altura de 1 linha (~36px) e cresce até MAX_TEXTAREA_H.
+  //   Começa com altura de 1 linha (~36px) e cresce até getMaxTextareaH().
   const renderTextarea = (placeholder = "Digite sua mensagem...", bg = "#fff") => (
     <textarea ref={textareaRef} value={text} onChange={e => setText(e.target.value)}
       placeholder={placeholder}
       rows={1}
       style={{
-        // NÃO usa maxHeight CSS: quando o usuário arrasta o resize pra
-        // um valor > MAX_TEXTAREA_H, a CSS capava o crescimento. O JS
-        // (useLayoutEffect + startResize) já controla o cap corretamente
-        // — MAX_TEXTAREA_H no auto-resize; RESIZE_MAX no manual.
+        // NÃO usa maxHeight CSS: quando o usuário arrasta o resize pra um
+        // valor grande, a CSS capava o crescimento. O JS (useLayoutEffect +
+        // startResize) já controla o cap com getMaxTextareaH() (~50% da
+        // seção) tanto no auto-resize quanto no manual.
         width: "100%", minHeight: 36,
         padding: "8px 20px",
         border: 0, outline: "none", resize: "none",
@@ -972,6 +985,7 @@ const StandaloneComposer = ({ channel, onChannelChange }) => {
   const DURATION = "480ms";
   return (
     <div
+      ref={outerRef}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       onFocus={() => setFocused(true)}
