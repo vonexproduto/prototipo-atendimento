@@ -141,7 +141,12 @@ const StandaloneComposer = ({ channel, onChannelChange }) => {
   const [pinned, setPinned] = React.useState(false);
   const [textareaH, setTextareaH] = React.useState(null);
   const [dragging, setDragging] = React.useState(false);
+  // `textareaH !== null` (resize manual ativo) também mantém o composer
+  // aberto: senão, ao soltar um arrasto pra cima com o mouse já fora da
+  // área, composerOpen viraria false no mouseup e o corpo colapsaria na
+  // hora — dava a impressão de que "o resize não sobe".
   const composerOpen = pinned || hovered || focused || dragging
+    || textareaH !== null
     || attachOpen || emojiOpen || dropdownOpen !== null;
 
   // Durante a animação de abrir/fechar, o wrapper precisa de overflow:hidden
@@ -197,6 +202,10 @@ const StandaloneComposer = ({ channel, onChannelChange }) => {
   // mesmo com o textarea vazio (parte da altura atual). Se cair abaixo do
   // RESIZE_MIN, volta ao auto-resize (textareaH = null) e desafixa.
   const startResize = (e) => {
+    // Sem textarea montado (abas WhatsApp/Torpedo) não há o que
+    // redimensionar — ignora. O handle nem é renderizado nesses casos,
+    // mas isso garante robustez.
+    if (!textareaRef.current) return;
     e.preventDefault();
     setDragging(true);
     const startY = e.clientY;
@@ -234,11 +243,9 @@ const StandaloneComposer = ({ channel, onChannelChange }) => {
     setDropdownOpen(null);
   }, [channel]);
 
-  // Reset da altura manual quando o composer fecha (mouse fora, sem pin
-  // e sem popover aberto). Não fecha se o usuário estiver arrastando.
-  React.useEffect(() => {
-    if (!composerOpen) setTextareaH(null);
-  }, [composerOpen]);
+  // Reset da altura manual: acontece SÓ quando o mouse realmente sai do
+  // composer (onMouseLeave do wrapper externo, abaixo), nunca como efeito
+  // colateral do composer fechar durante o arrasto. Ver handleMouseLeave.
 
   // Fecha popovers com Esc e click fora
   React.useEffect(() => {
@@ -860,6 +867,12 @@ const StandaloneComposer = ({ channel, onChannelChange }) => {
   // ── Renderização por canal ────────────────────────────────────────
   let content, leftActions, rightActions;
 
+  // Só as abas com <textarea> (campo de digitação livre) têm o handle de
+  // resize. WhatsApp usa template/preview e Torpedo usa dropzone de áudio —
+  // não há o que redimensionar, então não mostram o handle.
+  const hasTextarea = channel === CH.WHATSAPP_WEB || channel === CH.RCS
+    || channel === CH.SMS || channel === CH.NOTA;
+
   if (channel === CH.WHATSAPP) {
     if (selectedModel) {
       // Estado: modelo selecionado → mostra preview do template e ações
@@ -987,7 +1000,14 @@ const StandaloneComposer = ({ channel, onChannelChange }) => {
     <div
       ref={outerRef}
       onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
+      onMouseLeave={() => {
+        setHovered(false);
+        // Reseta a altura manual só quando NÃO está arrastando: durante um
+        // arrasto pra cima o mouse cruza pra fora transitoriamente e não
+        // pode zerar o resize. Vale pinado ou não (pin mantém aberto; a
+        // altura volta ao auto ao sair o mouse — conforme especificado).
+        if (!dragging) setTextareaH(null);
+      }}
       onFocus={() => setFocused(true)}
       onBlur={e => {
         if (!e.currentTarget.contains(e.relatedTarget)) setFocused(false);
@@ -1012,33 +1032,37 @@ const StandaloneComposer = ({ channel, onChannelChange }) => {
           transform: composerOpen ? "translateY(0)" : "translateY(100%)",
           transition: (pinned || dragging) ? "none" : `transform ${DURATION} ${BOUNCE}`,
         }}>
-          {/* Handle de resize no topo do body — sempre disponível quando o
-              composer está aberto. Arraste vertical redimensiona o textarea;
-              se cair abaixo do RESIZE_MIN, volta ao auto-resize (e desafixa
-              se estiver pinned). */}
-          <div
-            onMouseDown={startResize}
-            style={{
-              height: 10, cursor: "ns-resize",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              background: "#fff",
-              userSelect: "none",
-            }}
-            onMouseEnter={e => {
-              const bar = e.currentTarget.firstChild;
-              if (bar) bar.style.background = c.primary;
-            }}
-            onMouseLeave={e => {
-              const bar = e.currentTarget.firstChild;
-              if (bar) bar.style.background = c.borderSoft;
-            }}
-          >
-            <div style={{
-              width: 40, height: 3, borderRadius: 2,
-              background: c.borderSoft,
-              transition: "background 150ms ease",
-            }} />
-          </div>
+          {/* Handle de resize no topo do body — só nas abas com textarea.
+              Arraste vertical redimensiona o textarea; se cair abaixo do
+              RESIZE_MIN, volta ao auto-resize (e desafixa se pinned).
+              Área de toque alta (20px) com grip fino centralizado, pra
+              ser fácil de acertar. */}
+          {hasTextarea && (
+            <div
+              onMouseDown={startResize}
+              style={{
+                height: 16, cursor: "ns-resize",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                background: "#fff",
+                userSelect: "none", touchAction: "none",
+              }}
+              onMouseEnter={e => {
+                const bar = e.currentTarget.firstChild;
+                if (bar) bar.style.background = c.primary;
+              }}
+              onMouseLeave={e => {
+                const bar = e.currentTarget.firstChild;
+                if (bar) bar.style.background = c.borderSoft;
+              }}
+            >
+              <div style={{
+                width: 44, height: 4, borderRadius: 2,
+                background: c.borderSoft,
+                transition: "background 150ms ease",
+                pointerEvents: "none",
+              }} />
+            </div>
+          )}
           {content}
           <div style={{
             display: "flex", alignItems: "center",
