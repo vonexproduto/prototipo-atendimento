@@ -211,14 +211,21 @@ const StandaloneComposer = ({ channel, onChannelChange }) => {
     document.addEventListener("mouseup", onUp);
   };
 
-  // Fecha popovers ao trocar de canal e reseta a altura manual do textarea:
-  // cada canal recomeça no auto-resize (1 linha vazio, cresce com conteúdo).
+  // Fecha popovers ao trocar de canal. A altura manual do textarea
+  // (textareaH) NÃO é resetada aqui — o usuário quer que ela persista
+  // enquanto navega entre abas. Só é resetada quando o mouse sai do
+  // composer (auto-hide fecha) ou quando o pin é removido.
   React.useEffect(() => {
     setAttachOpen(false);
     setEmojiOpen(false);
     setDropdownOpen(null);
-    setTextareaH(null);
   }, [channel]);
+
+  // Reset da altura manual quando o composer fecha (mouse fora, sem pin
+  // e sem popover aberto). Não fecha se o usuário estiver arrastando.
+  React.useEffect(() => {
+    if (!composerOpen) setTextareaH(null);
+  }, [composerOpen]);
 
   // Fecha popovers com Esc e click fora
   React.useEffect(() => {
@@ -292,7 +299,11 @@ const StandaloneComposer = ({ channel, onChannelChange }) => {
           : "Clique para fixar essa barra"}
       >
         <button
-          onClick={() => setPinned(p => !p)}
+          onClick={() => {
+            // Ao desafixar, reseta a altura manual — volta ao auto-resize.
+            if (pinned) setTextareaH(null);
+            setPinned(p => !p);
+          }}
           aria-label={pinned ? "Desafixar composer" : "Fixar composer"}
           style={{
             width: 28, height: 28, borderRadius: 6, border: 0,
