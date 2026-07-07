@@ -647,7 +647,11 @@ const StandaloneComposer = ({ channel, onChannelChange }) => {
       placeholder={placeholder}
       rows={1}
       style={{
-        width: "100%", minHeight: 36, maxHeight: MAX_TEXTAREA_H,
+        // NÃO usa maxHeight CSS: quando o usuário arrasta o resize pra
+        // um valor > MAX_TEXTAREA_H, a CSS capava o crescimento. O JS
+        // (useLayoutEffect + startResize) já controla o cap corretamente
+        // — MAX_TEXTAREA_H no auto-resize; RESIZE_MAX no manual.
+        width: "100%", minHeight: 36,
         padding: "8px 20px",
         border: 0, outline: "none", resize: "none",
         background: bg,
