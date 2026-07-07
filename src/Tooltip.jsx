@@ -138,10 +138,12 @@ const CCMTooltip = ({ children, label, placement = "bottom", disabled = false, d
           role="tooltip"
           style={{
             position: "fixed",
-            // Antes de medir, posiciona no anchor (escondido) só pra o DOM existir.
-            // Após medir, usa a posição final clampada (pos).
-            top: pos ? pos.top : anchor.y,
-            left: pos ? pos.left : anchor.x,
+            // Antes de medir, posiciona no canto (0,0, escondido) pra dar
+            // largura disponível máxima e o tooltip medir seu tamanho
+            // natural — se medir no anchor perto da borda direita, o
+            // browser esmaga a largura e o tooltip vira uma tirinha vertical.
+            top: pos ? pos.top : 0,
+            left: pos ? pos.left : 0,
             visibility: pos ? "visible" : "hidden",
             background: "#28293d", color: "#fff",
             padding: "6px 10px", borderRadius: 6,
