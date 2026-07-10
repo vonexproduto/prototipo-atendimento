@@ -129,36 +129,40 @@ const ConversaPanel = ({
           )}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-          <ToolbarBtn
-            icon="ph-link-simple"
-            onClick={() => setLinkModalOpen(true)}
-            title="Vincular conversa a outro atendimento"
-          />
-          <ToolbarBtn
-            icon="ph-user"
-            onClick={() => onOpenContact?.(contact)}
-            title={`Ver dados do contato${contact?.name ? " — " + contact.name : ""}`}
-          />
-          <ToolbarBtn
-            icon="ph-clipboard-text"
-            onClick={() => onChangeQueue?.()}
-            title="Alterar fila / atendente"
-          />
-          <CCMTooltip label={isFinalized ? "Conversa finalizada" : "Finalizar conversa"}>
-            <button
-              aria-label={isFinalized ? "Conversa finalizada" : "Finalizar conversa"}
-              disabled={isFinalized}
-              onClick={() => !isFinalized && setConfirmFinalize(true)}
-              style={{
-                width: 32, height: 32, borderRadius: 8, border: 0,
-                background: isFinalized ? c.borderSoft : c.successPure,
-                color: isFinalized ? c.fg3 : "#fff",
-                cursor: isFinalized ? "not-allowed" : "pointer",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                marginLeft: 4,
-                opacity: isFinalized ? 0.7 : 1,
-              }}><i className="ph-fill ph-check" style={{ fontSize: 16 }} /></button>
-          </CCMTooltip>
+          {tab !== "Contato" && tab !== "Histórico" && (
+            <React.Fragment>
+              <ToolbarBtn
+                icon="ph-link-simple"
+                onClick={() => setLinkModalOpen(true)}
+                title="Vincular conversa a outro atendimento"
+              />
+              <ToolbarBtn
+                icon="ph-user"
+                onClick={() => onOpenContact?.(contact)}
+                title={`Ver dados do contato${contact?.name ? " — " + contact.name : ""}`}
+              />
+              <ToolbarBtn
+                icon="ph-clipboard-text"
+                onClick={() => onChangeQueue?.()}
+                title="Alterar fila / atendente"
+              />
+              <CCMTooltip label={isFinalized ? "Conversa finalizada" : "Finalizar conversa"}>
+                <button
+                  aria-label={isFinalized ? "Conversa finalizada" : "Finalizar conversa"}
+                  disabled={isFinalized}
+                  onClick={() => !isFinalized && setConfirmFinalize(true)}
+                  style={{
+                    width: 32, height: 32, borderRadius: 8, border: 0,
+                    background: isFinalized ? c.borderSoft : c.successPure,
+                    color: isFinalized ? c.fg3 : "#fff",
+                    cursor: isFinalized ? "not-allowed" : "pointer",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    marginLeft: 4,
+                    opacity: isFinalized ? 0.7 : 1,
+                  }}><i className="ph-fill ph-check" style={{ fontSize: 16 }} /></button>
+              </CCMTooltip>
+            </React.Fragment>
+          )}
           <ToolbarBtn icon={expanded ? "ph-arrows-in" : "ph-arrows-out"} onClick={onToggleExpand} title="Expandir" />
         </div>
       </div>
