@@ -229,24 +229,16 @@ const AtendimentoDetail = ({
               <AvatarStackHeader list={a.atendentes} />
             </div>
           </CCMTooltip>
-          <CCMTooltip label="Alterar fila de atendimento">
-            <button onClick={() => setAlterarFilaOpen(true)} aria-label="Alterar fila de atendimento" style={{
-              display: "inline-flex", alignItems: "center", gap: 6,
-              border: 0, cursor: "pointer",
-              background: c.warningLight, color: c.warningDark,
-              fontSize: 11, fontWeight: 600, padding: "5px 12px", borderRadius: 999,
-              fontFamily: "Montserrat, sans-serif",
-              transition: "opacity 150ms ease",
+          <CCMTooltip label="Alterar fila / atendente">
+            <button onClick={() => setAlterarFilaOpen(true)} aria-label="Alterar fila / atendente" style={{
+              width: 32, height: 32, borderRadius: 8, border: `1px solid ${c.border}`,
+              background: "#fff", color: c.fg2, cursor: "pointer",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              transition: "background 120ms ease, color 120ms ease, border-color 120ms ease",
             }}
-              onMouseEnter={e => e.currentTarget.style.opacity = "0.85"}
-              onMouseLeave={e => e.currentTarget.style.opacity = "1"}
-            >
-              <span>{a.tipoIcon || "🔥"}</span> {currentFila}
-              <span style={{
-                background: "#fff", color: c.warningDark, padding: "0 6px",
-                borderRadius: 999, fontSize: 10,
-              }}>{a.slaTag || "-1d"}</span>
-            </button>
+              onMouseEnter={e => { e.currentTarget.style.background = c.primaryLightest; e.currentTarget.style.color = c.primary; e.currentTarget.style.borderColor = c.primary; }}
+              onMouseLeave={e => { e.currentTarget.style.background = "#fff"; e.currentTarget.style.color = c.fg2; e.currentTarget.style.borderColor = c.border; }}
+            ><i className="ph ph-clipboard-text" style={{ fontSize: 16 }} /></button>
           </CCMTooltip>
           {/* Status pill clicável — abre o mesmo StatusDropdown da lista */}
           {(() => {

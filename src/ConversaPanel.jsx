@@ -141,11 +141,6 @@ const ConversaPanel = ({
                 onClick={() => onOpenContact?.(contact)}
                 title={`Ver dados do contato${contact?.name ? " — " + contact.name : ""}`}
               />
-              <ToolbarBtn
-                icon="ph-clipboard-text"
-                onClick={() => onChangeQueue?.()}
-                title="Alterar fila / atendente"
-              />
               <CCMTooltip label={isFinalized ? "Conversa finalizada" : "Finalizar conversa"}>
                 <button
                   aria-label={isFinalized ? "Conversa finalizada" : "Finalizar conversa"}
