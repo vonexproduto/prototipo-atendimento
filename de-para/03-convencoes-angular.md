@@ -104,6 +104,12 @@ Exemplo:
   `chat-dash-advanced-filters-modal`, `whatsapp-template-message-modal`,
   `contact-selection-for-duplicated-chat`, `resolve-options-automation-chat-modal`.
   **Reutilize** estes antes de criar um modal novo.
+- O serviço **`ChatOneToOneModalsService`** (`c1o1/modals/chat-one-to-one-modals.service.ts`)
+  centraliza a abertura de modais com métodos tipados:
+  `openAssignmentModal()`, `openNewChatModal()`, `openTicketCreationModal()`,
+  `openTicketAssignModal()`, `openChatSettingsModal()`,
+  `openChatDashboardAdvancedFiltersModal()`, `openSLAConfigByChatModal()`, etc.
+  **Use este service** em vez de chamar `MatDialog.open()` diretamente.
 
 ---
 
@@ -116,6 +122,8 @@ Exemplo:
   `.emoji_selection_popover`. Use a classe correspondente ao reproduzir os
   popovers do protótipo (`MarcadoresPopover` → `.chat-marker-popover`, etc.).
 - Tooltips → `matTooltip` (o protótipo simula com portais; descartar isso).
+  O Angular tem override mínimo em `@theme/css/tooltip.scss` (remove `max-width`
+  do `.mdc-tooltip__surface`).
 
 ---
 
@@ -131,17 +139,28 @@ Exemplo:
 | Torpedo (voz) | `ChatInputVoicemailComponent` | `app-chat-input-voicemail` |
 | Nota interna | `ChatInputNoteComponent` | `app-chat-input-note` |
 
-Roteador de abas: `ChatInputRouterComponent` (`app-chat-input-router`). Tipos de
-**mensagem** (na thread) têm router próprio: `MessageTypeRouterComponent`
-(`app-message-type-router`) → text/image/audio/document/video/html/whatsapp.
+Roteador de abas: `ChatInputRouterComponent` (`app-chat-input-router`). Existe
+também `NewChatInputRouterComponent` (`app-new-chat-input-router`) como versão
+atualizada. Tipos de **mensagem** (na thread) têm router próprio:
+`MessageTypeRouterComponent` (`app-message-type-router`) →
+text/image/audio/document/video/html/whatsapp/sticker/whatsapp-interactive/rcs-carousel/chat-note.
+
+Sub-componentes do WhatsApp input:
+- `ChatInputWhatsappTextComponent` — área de texto
+- `ChatInputWhatsappAudioRecorderComponent` — gravador de áudio
+- `ChatInputWhatsappBlockedComponent` — estado bloqueado (janela 24h expirada)
+- `ChatInputWhatsappTemplateSelectionComponent` — seletor de template
 
 ---
 
 ## Ícones
 
-- Protótipo: **Phosphor Icons** (`<i class="ph ph-…">`). **Não traduza os nomes
-  `ph-*` direto.** O `ngx-ccm` tem seu próprio conjunto de ícones — ao converter,
-  troque pelo ícone equivalente do design system do Angular (confirmar com o time).
+- Protótipo e Angular: ambos usam **Phosphor Icons** (`@phosphor-icons/web ^2.1.1`).
+  Três pesos disponíveis: `ph ph-` (regular), `ph-light ph-` (light), `ph-bold ph-` (bold).
+  Os nomes `ph-*` do protótipo **podem ser reaproveitados diretamente** na maioria
+  dos casos.
+- Exceção: ícones RCS usam **icomoon** custom (`icon-ph-rcs` em `assets/icons/rcs/style.css`).
+- Não há Material Icons no codebase.
 
 ---
 
@@ -152,10 +171,35 @@ Roteador de abas: `ChatInputRouterComponent` (`app-chat-input-router`). Tipos de
   - Dados via **services** (`inbox.service.ts`, etc.) → **repositories** (HTTP) →
     **state-managers** do módulo.
   - Realtime (mensagens novas, contadores) via **WebSocket**
-    (`@core/services/websocket.connector.ts`).
+    (`@core/services/websocket.connector.ts`, STOMP/SockJS).
   - Permissões/escopo ("Meus/Todos") via `permissions.service.ts` e guards.
+- **Sem NgRx.** Estado gerenciado com `BehaviorSubject` (RxJS) nos state-managers:
+  - `ChatOneToOneStateManager` (`providedIn: 'root'`) — seleção de chat, filtros, multi-seleção
+  - `DrawerStateManager` — layout de 4 drawers (talks 268px, folders 327px, chat auto, journey 268px)
+  - `ChatStateManager` (`chat/state-manager/`) — talk ativa, bloqueio de input, close/reopen
+  - `ChatProductsStateManager` — contexto de produtos
+  - Cleanup via `takeUntilDestroyed()` (`@angular/core/rxjs-interop`).
 - O `viewScope`, favoritos e `chatSettings` que o protótipo guarda em
   `localStorage` devem virar estado de service/preferências do usuário.
+
+---
+
+## Rotas do módulo Chat
+
+```
+/chat (ChatOneToOneComponent — shell)
+  ├── /conversas/:folder          → ChatCentralDrawersComponent
+  │     └── /:id                  → (mesma, conversa específica)
+  ├── /atendimentos               → ChatTicketsDashboardComponent
+  │     └── /:subjectId/fila      → TicketsDashListComponent
+  └── (default → /conversas/minhas)
+/respostas-da-campanha/:campaignId  → ChatCampaignAnswersComponent
+/respostas-da-automacao/:automationId → ChatAutomationAnswersComponent
+```
+
+Tipos de pasta (folder) em `chat-one-to-one-filters.model.ts`:
+`ALL` (ph-chats-circle), `MINE` (ph-at), `OPEN` (ph-circle-dashed),
+`AUTOMATION` (ph-robot), `SUBJECT` (ph-notepad), `TICKET` (ph-chat-circle-text).
 
 ---
 

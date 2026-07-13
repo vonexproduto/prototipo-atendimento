@@ -912,10 +912,13 @@ Funcionalidade: Transferir atendimento
     Então os atendentes da fila de destino são notificados
 
   @CEN-133
-  Cenário: Alterar a fila pela tela de detalhe
+  Cenário: Alterar a fila pela barra do atendimento
     Dado que o atendente está no detalhe do atendimento
-    Quando ele altera a fila (aba Fila) ou o atendente (aba Atendente) e confirma
+    Quando ele clica no botão "Alterar fila / atendente" na barra superior do atendimento
+    E altera a fila (aba Fila) ou o atendente (aba Atendente) e confirma
     Então o vínculo do atendimento é atualizado
+
+  Regra: O botão "Alterar fila / atendente" fica na barra do atendimento (não na barra da conversa).
 ```
 
 ---
@@ -948,6 +951,20 @@ Funcionalidade: Detalhar um atendimento
   Cenário: Panorama de contatos e atendentes do atendimento
     Quando o atendente abre o detalhe
     Então é possível consultar todos os contatos e todos os atendentes envolvidos no atendimento
+
+  @CEN-144
+  Cenário: Ocultar ações da barra da conversa nas abas "Contato" e "Histórico"
+    Dado que o atendente está visualizando uma conversa
+    Quando ele navega para a aba "Contato" ou "Histórico"
+    Então os botões de ação da barra da conversa (vincular, contato, finalizar) são ocultados
+    E apenas o título da conversa e o botão de expandir permanecem visíveis
+    Mas quando ele retorna à aba de mensagens
+    Então os botões de ação voltam a ser exibidos
+
+  @CEN-145
+  Cenário: Botão de expandir permanece visível em todas as abas
+    Dado que o atendente está visualizando uma conversa em qualquer aba (mensagens, Contato ou Histórico)
+    Então o botão de expandir/recolher o painel está sempre disponível na barra da conversa
 ```
 
 ---
@@ -1897,6 +1914,14 @@ Funcionalidade: Maximizar a área da thread colapsando a lista lateral
 
 ## Observações finais para o Back-end
 
+- **Toolbar da conversa — visibilidade condicional (§15 CEN-144..145):** quando o
+  atendente alterna para a aba "Contato" ou "Histórico" dentro de uma conversa, os
+  botões de ação (vincular, contato, finalizar) são **ocultados**. Apenas o título e o
+  botão de expandir ficam visíveis. Isso é puramente front-end — não altera nenhuma
+  regra de negócio ou endpoint.
+- **Botão "Alterar fila / atendente" realocado (§14 CEN-133):** o botão agora está na
+  barra superior do atendimento (e não mais na barra da conversa). O endpoint de
+  transferência permanece o mesmo — apenas o ponto de disparo na UI mudou.
 - **Roteamento atendimento → fila:** no protótipo a associação é simulada; no sistema
   real deve existir vínculo persistente entre atendimento e fila (e operação).
 - **Cálculo de TMA/TME, "próximo ao prazo", auto-fechamento de atendimento (§18 CEN-173)

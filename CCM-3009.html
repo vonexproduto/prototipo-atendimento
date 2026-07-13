@@ -51,6 +51,7 @@ const CH = {
   WHATSAPP_WEB:  "WhatsApp Web",
   RCS:           "RCS",
   SMS:           "SMS",
+  EMAIL:         "Email",
   TORPEDO:       "Torpedo de voz",
   NOTA:          "Nota interna",
 };
@@ -60,6 +61,7 @@ const TABS = [
   { key: CH.WHATSAPP_WEB, icon: "ph-desktop" },
   { key: CH.RCS,          icon: "ph-chat-text" },
   { key: CH.SMS,          icon: "ph-chat-circle" },
+  { key: CH.EMAIL,        icon: "ph-envelope" },
   { key: CH.TORPEDO,      icon: "ph-microphone" },
   { key: CH.NOTA,         icon: "ph-flag" },
 ];
@@ -111,6 +113,10 @@ const EMOJIS_SMILEYS = [
 //   • emojiOpen  — popover de emoji picker acima do smiley
 //   • Ambos fecham ao trocar de canal, apertar Esc, ou clicar fora.
 // ─────────────────────────────────────────────────────────────────────
+const PRODUCTS_EMAIL = [
+  { label: "bruna", sub: "", price: "R$ 0,00" },
+];
+
 const StandaloneComposer = ({ channel, onChannelChange }) => {
   const c = window.CCM.c;
   const [text, setText] = React.useState("");
@@ -120,6 +126,11 @@ const StandaloneComposer = ({ channel, onChannelChange }) => {
   // WhatsApp Web — toggle "Título do atendente" que vive dentro do popover
   // estendido do +. É apenas visual/local (não afeta lógica real).
   const [showAttendantTitle, setShowAttendantTitle] = React.useState(true);
+  // Email — toggle entre "Editor de Texto" e "HTML"; estado do campo Cc e Assunto.
+  const [emailEditorMode, setEmailEditorMode] = React.useState("texto");
+  const [emailCc, setEmailCc] = React.useState("");
+  const [emailSubject, setEmailSubject] = React.useState("Re: Nova conversa");
+  const [emailExpanded, setEmailExpanded] = React.useState(false);
   // Dropdowns de produto/modelo. Uso um único id ("prod" | "model" | null)
   // pra garantir mutuamente exclusivos.
   const [dropdownOpen, setDropdownOpen] = React.useState(null);
@@ -871,7 +882,7 @@ const StandaloneComposer = ({ channel, onChannelChange }) => {
   // resize. WhatsApp usa template/preview e Torpedo usa dropzone de áudio —
   // não há o que redimensionar, então não mostram o handle.
   const hasTextarea = channel === CH.WHATSAPP_WEB || channel === CH.RCS
-    || channel === CH.SMS || channel === CH.NOTA;
+    || channel === CH.SMS || channel === CH.EMAIL || channel === CH.NOTA;
 
   if (channel === CH.WHATSAPP) {
     if (selectedModel) {
@@ -954,6 +965,136 @@ const StandaloneComposer = ({ channel, onChannelChange }) => {
         <SendArrow disabled={!text.trim()} />
       </React.Fragment>
     );
+  } else if (channel === CH.EMAIL) {
+    // Email — layout com Destinatários Cc, toggle Editor de Texto/HTML,
+    // campo de assunto, textarea com toolbar rich text.
+    const EmailToolbarBtn = ({ icon, label, bold }) => (
+      <button aria-label={label} style={{
+        width: 28, height: 28, borderRadius: 4, border: 0,
+        background: "transparent", color: c.fg2, cursor: "pointer",
+        display: "inline-flex", alignItems: "center", justifyContent: "center",
+        fontWeight: bold ? 700 : 400,
+      }}
+        onMouseEnter={e => e.currentTarget.style.background = c.canvas}
+        onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+      >
+        {icon ? <i className={`ph ${icon}`} style={{ fontSize: 15 }} /> :
+          <span style={{ fontSize: 14, fontWeight: bold ? 800 : 500 }}>{label}</span>}
+      </button>
+    );
+
+    content = (
+      <React.Fragment>
+        {/* Destinatários Cc */}
+        <div style={{ padding: "10px 20px 0", background: "#fff" }}>
+          <input
+            value={emailCc} onChange={e => setEmailCc(e.target.value)}
+            placeholder="Destinatários Cc"
+            style={{
+              width: "100%", border: `1px solid ${c.border}`, borderRadius: 8,
+              padding: "10px 14px", fontSize: 13, color: c.fg1,
+              outline: "none", background: "#fff", boxSizing: "border-box",
+            }}
+            onFocus={e => e.currentTarget.style.borderColor = c.primary}
+            onBlur={e => e.currentTarget.style.borderColor = c.border}
+          />
+        </div>
+
+        {/* Toggle Editor de Texto / HTML + expand */}
+        <div style={{
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          padding: "10px 20px 0", background: "#fff",
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+            {["Editor de Texto", "HTML"].map(mode => (
+              <label key={mode} style={{
+                display: "inline-flex", alignItems: "center", gap: 6,
+                cursor: "pointer", fontSize: 13, fontWeight: 500,
+                color: emailEditorMode === (mode === "Editor de Texto" ? "texto" : "html") ? c.fg1 : c.fg2,
+              }}>
+                <span style={{
+                  width: 16, height: 16, borderRadius: "50%",
+                  border: `2px solid ${emailEditorMode === (mode === "Editor de Texto" ? "texto" : "html") ? c.primary : c.borderSoft}`,
+                  display: "inline-flex", alignItems: "center", justifyContent: "center",
+                }}>
+                  {emailEditorMode === (mode === "Editor de Texto" ? "texto" : "html") && (
+                    <span style={{
+                      width: 8, height: 8, borderRadius: "50%", background: c.primary,
+                    }} />
+                  )}
+                </span>
+                {mode}
+                <input type="radio" name="email-editor" value={mode}
+                  checked={emailEditorMode === (mode === "Editor de Texto" ? "texto" : "html")}
+                  onChange={() => setEmailEditorMode(mode === "Editor de Texto" ? "texto" : "html")}
+                  style={{ display: "none" }}
+                />
+              </label>
+            ))}
+          </div>
+          <button
+            onClick={() => setEmailExpanded(x => !x)}
+            aria-label="Expandir editor"
+            style={{
+              width: 28, height: 28, borderRadius: 6, border: 0,
+              background: "transparent", color: c.fg2, cursor: "pointer",
+              display: "inline-flex", alignItems: "center", justifyContent: "center",
+            }}
+            onMouseEnter={e => e.currentTarget.style.color = c.primary}
+            onMouseLeave={e => e.currentTarget.style.color = c.fg2}
+          >
+            <i className={`ph ${emailExpanded ? "ph-arrows-in" : "ph-arrows-out"}`} style={{ fontSize: 15 }} />
+          </button>
+        </div>
+
+        {/* Assunto */}
+        <div style={{ padding: "10px 20px 0", background: "#fff" }}>
+          <input
+            value={emailSubject} onChange={e => setEmailSubject(e.target.value)}
+            placeholder="Assunto"
+            style={{
+              width: "100%", border: 0, borderBottom: `1px solid ${c.border}`,
+              padding: "8px 0", fontSize: 13, color: c.fg1, fontWeight: 500,
+              outline: "none", background: "#fff", boxSizing: "border-box",
+            }}
+          />
+        </div>
+
+        {/* Textarea */}
+        <AttachedFileBadge />
+        {renderTextarea("Digite sua mensagem...")}
+
+        {/* Rich text toolbar + produto/preço/enviar na mesma linha */}
+        <div style={{
+          display: "flex", alignItems: "center",
+          padding: "4px 16px 8px", background: "#fff",
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 2, flex: 1, minWidth: 0 }}>
+            <PlusBtn />
+            <Divider />
+            <EmojiBtn />
+            <EmailToolbarBtn label="B" bold />
+            <EmailToolbarBtn label="I" />
+            <EmailToolbarBtn icon="ph-strikethrough" label="Tachado" />
+            <EmailToolbarBtn icon="ph-quotes" label="Citação" />
+            <EmailToolbarBtn label="H₁" />
+            <EmailToolbarBtn icon="ph-list-bullets" label="Lista" />
+            <EmailToolbarBtn icon="ph-list-numbers" label="Lista numerada" />
+            <EmailToolbarBtn icon="ph-image" label="Imagem" />
+            <EmailToolbarBtn icon="ph-paperclip" label="Anexo" />
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
+            <ProductDropdown placeholder="bruna" compact options={PRODUCTS_EMAIL} rich />
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 13, color: c.fg1, fontWeight: 500 }}>
+              <span style={{ color: c.fg2 }}>$</span> R$ 0,00
+            </span>
+            <SendArrow disabled={!text.trim()} />
+          </div>
+        </div>
+      </React.Fragment>
+    );
+    leftActions = null;
+    rightActions = null;
   } else if (channel === CH.TORPEDO) {
     content = (
       <React.Fragment>
@@ -1064,6 +1205,7 @@ const StandaloneComposer = ({ channel, onChannelChange }) => {
             </div>
           )}
           {content}
+          {(leftActions || rightActions) && (
           <div style={{
             display: "flex", alignItems: "center",
             padding: "10px 16px 14px", gap: 12,
@@ -1077,6 +1219,7 @@ const StandaloneComposer = ({ channel, onChannelChange }) => {
               {rightActions}
             </div>
           </div>
+          )}
         </div>
       </div>
     </div>

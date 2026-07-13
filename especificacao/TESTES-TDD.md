@@ -296,6 +296,18 @@
 | INT-TR-01 | atendimento na fila A | transferir para fila B | vínculo passa para fila B |
 | INT-TR-02 | atendimento com atendente X | transferir para atendente Y | responsável passa a Y |
 | INT-TR-03 | "notificar fila" marcado | transferir | atendentes da fila de destino notificados |
+| INT-TR-04 | detalhe do atendimento aberto | clicar "Alterar fila / atendente" na barra do atendimento | modal abre com abas Fila e Atendente; alteração reflete no atendimento |
+
+### 2.7B Barra de ações da conversa (toolbar)  ·  ref @CEN-104, @CEN-144, @CEN-145
+
+| ID | Preparar | Executar | Verificar |
+|---|---|---|---|
+| INT-TB-01 | conversa aberta, aba de mensagens ativa | observar barra da conversa | botões vincular, contato, finalizar e expandir visíveis |
+| INT-TB-02 | conversa aberta | navegar para aba "Contato" | botões vincular, contato e finalizar são ocultados; apenas título e expandir visíveis |
+| INT-TB-03 | conversa aberta | navegar para aba "Histórico" | mesma ocultação que INT-TB-02 |
+| INT-TB-04 | aba "Contato" ou "Histórico" ativa | retornar à aba de mensagens | botões de ação reaparecem |
+| INT-TB-05 | qualquer aba ativa | observar botão expandir | botão expandir/recolher visível em todas as abas |
+| INT-TB-06 | detalhe do atendimento aberto | observar barra da conversa | botão "Alterar fila / atendente" NÃO aparece na barra da conversa (movido para barra do atendimento) |
 
 ### 2.8 Histórico do contato  ·  ref @CEN-150..154
 
@@ -560,7 +572,8 @@
 | E2E-10 | Abrir conversa → enviar em vários canais → nota interna | @CEN-101, @CEN-110, @CEN-111 |
 | E2E-11 | Finalizar conversa → confirmar bloqueio de envio | @CEN-120, @CEN-121 |
 | E2E-12 | Transferir para fila e para atendente (com notificação) | @CEN-130..132 |
-| E2E-13 | Detalhe: abas Conversas / Contato / Histórico | @CEN-140..142 |
+| E2E-12B | Alterar fila/atendente pelo botão na barra do atendimento | @CEN-133 |
+| E2E-13 | Detalhe: abas Conversas / Contato / Histórico + toolbar oculta em Contato/Histórico | @CEN-140..145 |
 | E2E-14 | Histórico do contato: consolidar + filtrar por fila/período/id | @CEN-150..154 |
 | E2E-15 | Transferir por I.A. em "Sem fila" → confirmar → ver marcação e total | @CEN-160..163 |
 | E2E-16 | Editar configurações do chat → salvar → validar efeito | @CEN-170..177 |
@@ -659,7 +672,8 @@
 | Canais | @CEN-110..111 | INT-CV-01/02, E2E-10 |
 | Finalizar | @CEN-120..122 | INT-CV-03/04, NEG-05, E2E-11 |
 | Transferir (entre filas/atendentes) | @CEN-130..133 | INT-TR-*, E2E-12 |
-| Detalhe (abas) | @CEN-140..143 | UT-AGG-*, E2E-13 |
+| Barra de ações da conversa (toolbar) | @CEN-104, @CEN-144..145 | INT-TB-*, E2E-13 |
+| Detalhe (abas) | @CEN-140..145 | UT-AGG-*, INT-TB-*, E2E-13 |
 | Histórico do contato | @CEN-150..154 | INT-HC-*, E2E-14 |
 | I.A. | @CEN-160..163 | INT-IA-*, NEG-07, E2E-15 |
 | Configurações | @CEN-170..178 | INT-CFG-*, E2E-16/32, NF-SEC-02 |

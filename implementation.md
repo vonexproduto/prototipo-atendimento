@@ -122,7 +122,7 @@ src/app/@shared/components/global-search-preview/
 | `components/tickets-dash-list/tickets-dash-list.component.{ts,html,scss}` | Refatorar layout da listagem para o novo design. Trocar tabela existente pela nova com 10 colunas e ações sticky. Adicionar empty/loading states. |
 | `components/tickets-dash-table/tickets-dash-table.component.{ts,html,scss}` | Atualizar colunas, badges de SLA, AvatarStack para contatos/atendentes. |
 | `components/tickets-dash-sidebar/tickets-dash-sidebar.component.{ts,html,scss}` | Atualizar visual da sidebar de filas (hierarquia, badges, ícones). |
-| `components/chat-one-to-one-container/chat-one-to-one-container.component.{ts,html,scss}` | Refatorar toolbar superior (5 ações + expandir). Conectar com `AtendimentoDetailDrawer`. |
+| `components/chat-one-to-one-container/chat-one-to-one-container.component.{ts,html,scss}` | Refatorar toolbar superior. **Atenção:** botões vincular/contato/finalizar devem ser ocultados (`*ngIf`) quando a aba ativa é "Contato" ou "Histórico" — apenas o título e o botão expandir ficam visíveis (CEN-144/145). O botão "Alterar fila / atendente" **foi removido** desta toolbar — agora vive na barra do atendimento (ver `ChatTicketsDashboardComponent`, CEN-133). |
 | `chat-one-to-one-routing.module.ts` | _Não muda rotas_ — drawer abre por estado, não navegação. Confirmar com PM. |
 | `chat-one-to-one.module.ts` | Registrar novos componentes nos `declarations`. |
 | _(header global, fora do módulo)_ | Adicionar campo de busca global no header. Componente em `@shared/components/header/` ou similar. |
@@ -294,7 +294,7 @@ Ordenada por dependência. Estime cada uma com seu PM/Tech Lead.
 9. **Aba Conversas**: lista de cards de conversa, status por conversa
 10. **Aba Contato**: lista de pessoas no atendimento
 11. **Aba Histórico**: timeline completa do contato (depende de endpoint backend)
-12. **Painel de conversa**: refatorar `ChatOneToOneContainerComponent` + toolbar superior
+12. **Painel de conversa**: refatorar `ChatOneToOneContainerComponent` + toolbar superior. **Toolbar condicional:** ocultar botões vincular/contato/finalizar nas abas Contato e Histórico (CEN-144/145). **Botão "Alterar fila"** foi movido para a barra do atendimento (CEN-133).
 13. **Composer multi-canal**: tabs de canal, indicador de custo, contador de chars
 14. **Popovers** (marcadores, contato, transferir, salvar): implementar com `MatMenu` / popover
 15. **Modal de transferência de fila**: criar `TransferToQueueModalComponent`

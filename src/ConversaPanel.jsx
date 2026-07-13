@@ -36,6 +36,16 @@
 //   FinalizarConversaModal → fluxo "encerrar conversa" (MatDialog de confirmação)
 //   ContactInfoPopover   → metadados do contato (chat-metadata-popover em popover.scss)
 //   DayChip/ToolbarBtn   → helpers visuais (sem 1:1; chip de data + botão-ícone)
+//
+// TOOLBAR CONDICIONAL (CEN-144/145):
+//   Os botões vincular/contato/finalizar são ocultados quando tab="Contato"|"Histórico".
+//   Apenas o título e o botão expandir ficam visíveis nessas abas.
+//   No Angular: *ngIf no ChatOneToOneHeaderComponent baseado na aba ativa.
+//
+// BOTÃO "ALTERAR FILA" REMOVIDO DESTA TOOLBAR:
+//   O botão ph-clipboard-text ("Alterar fila / atendente") foi movido para a
+//   barra do atendimento (AtendimentoDetail.jsx / ChatTicketsDashboardComponent).
+//
 // Doc: de-para/02-componentes.md
 // =====================================================================
 const ConversaPanel = ({

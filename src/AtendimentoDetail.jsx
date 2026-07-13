@@ -20,6 +20,10 @@
 //   AlterarFilaModal    → TicketAssignmentModalComponent <app-ticket-assignment-modal>
 //                         (aba Fila) + UserAssignmentModalComponent
 //                         <app-user-assignment-modal> (aba Atendente)
+//   Botão "Alterar fila" → botão-ícone 32×32 (ph-clipboard-text) na barra do
+//                         atendimento. Antes era badge amarelo com SLA + nome da fila.
+//                         Agora é ícone simples com hover primary. TRIGGER movido
+//                         de ConversaPanel → AtendimentoDetail (CEN-133).
 //   MarcadoresPopover   → ChatAttendanceMarkersSelectionComponent
 //                         <app-chat-attendance-markers-selection>
 //   StatusDropdown      → ChatTicketStatusComponent <app-chat-ticket-status>
