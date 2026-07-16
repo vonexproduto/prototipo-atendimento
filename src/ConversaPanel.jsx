@@ -151,21 +151,10 @@ const ConversaPanel = ({
                 onClick={() => onOpenContact?.(contact)}
                 title={`Ver dados do contato${contact?.name ? " — " + contact.name : ""}`}
               />
-              <CCMTooltip label={isFinalized ? "Conversa finalizada" : "Finalizar conversa"}>
-                <button
-                  aria-label={isFinalized ? "Conversa finalizada" : "Finalizar conversa"}
-                  disabled={isFinalized}
-                  onClick={() => !isFinalized && setConfirmFinalize(true)}
-                  style={{
-                    width: 32, height: 32, borderRadius: 8, border: 0,
-                    background: isFinalized ? c.borderSoft : c.successPure,
-                    color: isFinalized ? c.fg3 : "#fff",
-                    cursor: isFinalized ? "not-allowed" : "pointer",
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    marginLeft: 4,
-                    opacity: isFinalized ? 0.7 : 1,
-                  }}><i className="ph-fill ph-check" style={{ fontSize: 16 }} /></button>
-              </CCMTooltip>
+              <FinalizeBtn
+                isFinalized={isFinalized}
+                onClick={() => !isFinalized && setConfirmFinalize(true)}
+              />
             </React.Fragment>
           )}
           <ToolbarBtn icon={expanded ? "ph-arrows-in" : "ph-arrows-out"} onClick={onToggleExpand} title="Expandir" />
@@ -443,6 +432,33 @@ const ToolbarBtn = ({ icon, onClick, title }) => {
           color: c.fg2, cursor: "pointer",
           display: "flex", alignItems: "center", justifyContent: "center",
         }}><i className={`ph ${icon}`} style={{ fontSize: 16 }} /></button>
+    </CCMTooltip>
+  );
+};
+
+// Botão "Finalizar conversa" no mesmo padrão do ToolbarBtn (ghost + hover),
+// só que com o check em verde pra sinalizar que é ação positiva. Fica cinza
+// e desabilitado quando a conversa já está finalizada.
+const FinalizeBtn = ({ isFinalized, onClick }) => {
+  const c = window.CCM.c;
+  const [hover, setHover] = React.useState(false);
+  const label = isFinalized ? "Conversa finalizada" : "Finalizar conversa";
+  return (
+    <CCMTooltip label={label}>
+      <button
+        type="button"
+        aria-label={label}
+        disabled={isFinalized}
+        onClick={onClick}
+        onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
+        style={{
+          width: 32, height: 32, borderRadius: 8, border: 0,
+          background: hover && !isFinalized ? c.borderSoft : "transparent",
+          color: isFinalized ? c.fg3 : c.successPure,
+          cursor: isFinalized ? "not-allowed" : "pointer",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          opacity: isFinalized ? 0.6 : 1,
+        }}><i className="ph ph-check" style={{ fontSize: 16 }} /></button>
     </CCMTooltip>
   );
 };

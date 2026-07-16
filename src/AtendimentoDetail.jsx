@@ -277,7 +277,8 @@ const AtendimentoDetail = ({
             );
           })()}
           <CCMTooltip label="Nova conversa">
-            <button onClick={() => setNovaConversaOpen(true)} aria-label="Nova conversa" style={{
+            {/* Ação desativada a pedido — mantém só affordance visual + tooltip. */}
+            <button type="button" aria-label="Nova conversa" style={{
               width: 32, height: 32, borderRadius: "50%", border: 0,
               background: c.primary, color: "#fff", cursor: "pointer",
               display: "flex", alignItems: "center", justifyContent: "center",
