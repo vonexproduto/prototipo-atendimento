@@ -1119,25 +1119,8 @@ const LinkConversaModal = ({ convId, currentAtendimentoId, onClose, onLinked, on
                             {ct.name} · {ct.email}
                           </div>
                         </div>
-                        <CCMTooltip label="Visualizar atendimento (somente leitura)">
-                          <button
-                            type="button"
-                            onClick={() => setPreviewId(at.id)}
-                            aria-label="Visualizar atendimento"
-                            style={{
-                              width: 30, height: 30, border: `1px solid ${c.border}`,
-                              background: "#fff", color: c.fg2, borderRadius: 8,
-                              cursor: "pointer", flexShrink: 0,
-                              display: "inline-flex", alignItems: "center", justifyContent: "center",
-                              fontFamily: "Montserrat, sans-serif",
-                              transition: "background 120ms ease, color 120ms ease, border-color 120ms ease",
-                            }}
-                            onMouseEnter={e => { e.currentTarget.style.background = c.primaryLightest; e.currentTarget.style.color = c.primary; e.currentTarget.style.borderColor = c.primary; }}
-                            onMouseLeave={e => { e.currentTarget.style.background = "#fff"; e.currentTarget.style.color = c.fg2; e.currentTarget.style.borderColor = c.border; }}
-                          >
-                            <i className="ph ph-eye" style={{ fontSize: 14 }} />
-                          </button>
-                        </CCMTooltip>
+                        {/* Botão "Visualizar atendimento (somente leitura)" escondido a
+                            pedido — handler setPreviewId segue vivo pra reativar. */}
                         <button
                           type="button"
                           onClick={() => onLinked?.(at.id)}
