@@ -529,7 +529,8 @@ const AtendimentosList = ({
               label="Novo atendimento"
               hovered={hoveredBtn === "novo"}
               onHoverChange={(h) => setHoveredBtn(h ? "novo" : null)}
-              onClick={() => setNovoAtendimentoOpen(true)}
+              /* Ação desativada a pedido — mantém só affordance visual + tooltip. */
+              onClick={() => {}}
               variant="primary"
             />
           </div>
