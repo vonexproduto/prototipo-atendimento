@@ -148,6 +148,7 @@ const AtendimentosList = ({
   // Direção default por coluna (quando o usuário acabou de abrir o modal pela 1ª vez)
   const DEFAULT_SORT_DIRECTION = {
     marcador: "asc", dataInicio: "desc", dataAtualizacao: "desc", sla: "asc",
+    semResposta: "desc",
   };
   // SLA mode sem sortConfig explícito → assume sort por SLA
   const effectiveSortConfig = sortConfig
@@ -232,8 +233,28 @@ const AtendimentosList = ({
     return formatAtendimentoDate(new Date(ms + offsetHours * 3600 * 1000));
   };
 
+  // "Sem resposta" = ao menos uma conversa NÃO finalizada cuja última
+  // mensagem é do contato (o atendente ainda não respondeu).
+  const hasSemResposta = (a) => {
+    const convs = Array.isArray(a.conversas) ? a.conversas : [];
+    return convs.some(cv => {
+      if (cv.status === "Finalizada") return false;
+      const msgs = Array.isArray(cv.messages) ? cv.messages : [];
+      for (let i = msgs.length - 1; i >= 0; i--) {
+        const m = msgs[i];
+        if (!m || m.type || !m.role) continue; // ignora system/type-only
+        return m.role === "contact";
+      }
+      return false;
+    });
+  };
+
   const sortByColumn = (arr, column, direction = "asc") => {
     const mult = direction === "desc" ? -1 : 1;
+    if (column === "semResposta") {
+      // desc = sem resposta primeiro (true=1) · asc = respondidos primeiro
+      return [...arr].sort((a, b) => mult * ((hasSemResposta(b) ? 1 : 0) - (hasSemResposta(a) ? 1 : 0)));
+    }
     if (column === "marcador") {
       return [...arr].sort((a, b) => {
         const am = a.marcadores?.[0]?.label || "zzz_sem_marcador";
@@ -599,7 +620,8 @@ const AtendimentosList = ({
                     const slaCol = { label: "SLA", column: "sla", sort: true, onClick: () => setSortModalOpen("sla"), active: effectiveSortConfig?.column === "sla" };
                     return [
                       { label: "ID" },
-                      // No modo SLA, SLA vai pra 2ª coluna (logo após ID) e some do final
+                      { label: "Sem resposta",     column: "semResposta",     sort: true, onClick: () => setSortModalOpen("semResposta"),     active: effectiveSortConfig?.column === "semResposta" },
+                      // No modo SLA, SLA vai pra 3ª coluna (logo após Sem resposta) e some do final
                       ...(isSlaMode ? [slaCol] : []),
                       ...(isSlaMode ? [
                         { label: "Operação" },
@@ -684,6 +706,21 @@ const AtendimentosList = ({
                           )}
                           {a.id}
                         </span>
+                      </td>
+                      <td style={{ padding: "12px 16px", whiteSpace: "nowrap" }}>
+                        {hasSemResposta(a) ? (
+                          <span style={{
+                            background: "#ffe4c4", color: "#c45a0c",
+                            fontSize: 11, fontWeight: 700,
+                            padding: "3px 10px", borderRadius: 999,
+                            display: "inline-flex", alignItems: "center", gap: 5,
+                          }}>
+                            <i className="ph-fill ph-warning-circle" style={{ fontSize: 12 }} />
+                            Sem resposta
+                          </span>
+                        ) : (
+                          <span style={{ fontSize: 12, color: c.fg3 }}>—</span>
+                        )}
                       </td>
                       {isSlaMode && slaTd}
                       {isSlaMode && (() => {
@@ -2143,6 +2180,17 @@ const COLUMN_SORT_CONFIG = {
     directions: [
       { value: "asc",  title: "Mais atrasados primeiro", desc: "Atendimentos com maior atraso no SLA aparecem antes (mais urgentes)." },
       { value: "desc", title: "Mais atrasados último",   desc: "Atendimentos com SLA mais folgado aparecem antes." },
+    ],
+  },
+  semResposta: {
+    icon: "ph-warning-circle",
+    modalTitle: "Ordenar por sem resposta",
+    description: "Atendimentos com pelo menos uma conversa não finalizada em que a última mensagem é do contato ganham o badge \"Sem resposta\".",
+    actionPage: "Aplica a ordenação apenas nos atendimentos visíveis na página atual. Outras páginas mantêm sua ordem original.",
+    actionAll:  "Aplica a ordenação na lista inteira, independente da paginação. Itens podem mudar de página.",
+    directions: [
+      { value: "desc", title: "Sem resposta primeiro", desc: "Atendimentos com mensagem do contato aguardando resposta aparecem antes." },
+      { value: "asc",  title: "Respondidos primeiro",  desc: "Atendimentos sem mensagens pendentes aparecem antes." },
     ],
   },
 };

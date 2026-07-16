@@ -690,6 +690,18 @@ const ConvCard = ({ conv, active, onClick }) => {
   const c = window.CCM.c;
   const statusBg = conv.status === "Aberta" ? c.successLight : c.borderSoft;
   const statusFg = conv.status === "Aberta" ? c.successDark : c.fg2;
+  // "Sem resposta" = conversa não finalizada + última mensagem real é do
+  // contato (atendente ainda não respondeu).
+  const semResposta = (() => {
+    if (conv.status === "Finalizada") return false;
+    const msgs = Array.isArray(conv.messages) ? conv.messages : [];
+    for (let i = msgs.length - 1; i >= 0; i--) {
+      const m = msgs[i];
+      if (!m || m.type || !m.role) continue;
+      return m.role === "contact";
+    }
+    return false;
+  })();
   return (
     <div onClick={onClick} style={{
       background: active ? c.primaryLightest : "#fff",
@@ -705,6 +717,18 @@ const ConvCard = ({ conv, active, onClick }) => {
              style={{ fontSize: 12, color: conv.channel === "email" ? c.secundaryMedium : "#25D366" }} />
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          {semResposta && (
+            <CCMTooltip label="A última mensagem é do contato e ainda não foi respondida">
+              <span style={{
+                background: "#ffe4c4", color: "#c45a0c",
+                fontSize: 9, fontWeight: 700, padding: "2px 7px", borderRadius: 999,
+                display: "inline-flex", alignItems: "center", gap: 3,
+              }}>
+                <i className="ph-fill ph-warning-circle" style={{ fontSize: 10 }} />
+                Sem resposta
+              </span>
+            </CCMTooltip>
+          )}
           <span style={{
             background: statusBg, color: statusFg,
             fontSize: 9, fontWeight: 700, padding: "2px 7px", borderRadius: 999,

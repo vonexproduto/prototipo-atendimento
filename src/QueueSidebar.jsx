@@ -210,6 +210,38 @@ const QueuesTree = ({
   // O countMap efetivo: favoritos quando filtro ligado, total real caso contrário.
   const countMap = favCountByQueue || realCountByQueue;
 
+  // "Sem resposta" por fila-folha: contagem de atendimentos daquela fila com
+  // pelo menos uma conversa não finalizada em que a última mensagem é do
+  // contato (mesma regra usada na lista e no ConvCard).
+  const semRespostaByQueue = React.useMemo(() => {
+    const atendimentoHasSemResposta = (a) => {
+      const convs = Array.isArray(a.conversas) ? a.conversas : [];
+      return convs.some(cv => {
+        if (cv.status === "Finalizada") return false;
+        const msgs = Array.isArray(cv.messages) ? cv.messages : [];
+        for (let i = msgs.length - 1; i >= 0; i--) {
+          const m = msgs[i];
+          if (!m || m.type || !m.role) continue;
+          return m.role === "contact";
+        }
+        return false;
+      });
+    };
+    const map = {};
+    for (const a of atendimentos) {
+      if (!atendimentoHasSemResposta(a)) continue;
+      const qid = window.CCM.queueOfAtendimento(a.id, queues);
+      if (!qid) continue;
+      map[qid] = (map[qid] || 0) + 1;
+    }
+    return map;
+  }, [atendimentos, queues]);
+
+  const semRespostaOfQueue = (q) => {
+    if (q.children?.length) return q.children.reduce((sum, ch) => sum + (semRespostaByQueue[ch.id] || 0), 0);
+    return semRespostaByQueue[q.id] || 0;
+  };
+
   // Soma dos filhos pra pais (count agregado)
   const countOfQueue = (q) => {
     if (q.children?.length) return q.children.reduce((sum, ch) => sum + (countMap[ch.id] || 0), 0);
@@ -308,6 +340,7 @@ const QueuesTree = ({
         <React.Fragment key={q.id}>
           <QueueRow
             q={{ ...q, count: countOfQueue(q) }}
+            semResposta={semRespostaOfQueue(q)}
             activeId={activeQueueId}
             expanded={expanded[q.id]}
             onToggle={() => setExpanded(e => ({ ...e, [q.id]: !e[q.id] }))}
@@ -317,6 +350,7 @@ const QueuesTree = ({
             <QueueRow
               key={ch.id}
               q={{ ...ch, count: countMap[ch.id] || 0 }}
+              semResposta={semRespostaByQueue[ch.id] || 0}
               child
               activeId={activeQueueId}
               onSelect={() => onSelectQueue(ch.id)}
@@ -502,7 +536,7 @@ const ResizeHandle = ({ onStart, onDoubleClick, hover, resizing, setHover, color
   );
 };
 
-const QueueRow = ({ q, child, activeId, expanded, onToggle, onSelect }) => {
+const QueueRow = ({ q, child, activeId, expanded, onToggle, onSelect, semResposta = 0 }) => {
   const c = window.CCM.c;
   const active = q.id === activeId;
   return (
@@ -520,6 +554,19 @@ const QueueRow = ({ q, child, activeId, expanded, onToggle, onSelect }) => {
       )}
       <span style={{ fontSize: 14 }}>{q.icon}</span>
       <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{q.name}</span>
+      {semResposta > 0 && (
+        <CCMTooltip label={`Esta fila tem ${semResposta} atendimento${semResposta > 1 ? "s" : ""} com conversa sem resposta`}>
+          <span aria-label="Sem resposta nesta fila" style={{
+            width: 16, height: 16, borderRadius: "50%",
+            background: "#f39023", color: "#fff",
+            fontSize: 10, fontWeight: 700,
+            display: "inline-flex", alignItems: "center", justifyContent: "center",
+            flexShrink: 0,
+          }}>
+            <i className="ph-fill ph-warning" style={{ fontSize: 9 }} />
+          </span>
+        </CCMTooltip>
+      )}
       <span style={{
         background: c.successLight, color: c.successDark,
         fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 999, minWidth: 26, textAlign: "center",
