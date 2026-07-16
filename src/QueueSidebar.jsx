@@ -554,19 +554,8 @@ const QueueRow = ({ q, child, activeId, expanded, onToggle, onSelect, semRespost
       )}
       <span style={{ fontSize: 14 }}>{q.icon}</span>
       <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{q.name}</span>
-      {semResposta > 0 && (
-        <CCMTooltip label={`Esta fila tem ${semResposta} atendimento${semResposta > 1 ? "s" : ""} com conversa sem resposta`}>
-          <span aria-label="Sem resposta nesta fila" style={{
-            width: 16, height: 16, borderRadius: "50%",
-            background: "#f39023", color: "#fff",
-            fontSize: 10, fontWeight: 700,
-            display: "inline-flex", alignItems: "center", justifyContent: "center",
-            flexShrink: 0,
-          }}>
-            <i className="ph-fill ph-warning" style={{ fontSize: 9 }} />
-          </span>
-        </CCMTooltip>
-      )}
+      {/* Indicador "Sem resposta" escondido a pedido — computação segue viva
+          (semRespostaByQueue/semRespostaOfQueue) caso queiramos reativar. */}
       <span style={{
         background: c.successLight, color: c.successDark,
         fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 999, minWidth: 26, textAlign: "center",
