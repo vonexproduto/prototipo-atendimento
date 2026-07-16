@@ -36,6 +36,16 @@
 //   FinalizarConversaModal → fluxo "encerrar conversa" (MatDialog de confirmação)
 //   ContactInfoPopover   → metadados do contato (chat-metadata-popover em popover.scss)
 //   DayChip/ToolbarBtn   → helpers visuais (sem 1:1; chip de data + botão-ícone)
+//
+// TOOLBAR CONDICIONAL (CEN-144/145):
+//   Os botões vincular/contato/finalizar são ocultados quando tab="Contato"|"Histórico".
+//   Apenas o título e o botão expandir ficam visíveis nessas abas.
+//   No Angular: *ngIf no ChatOneToOneHeaderComponent baseado na aba ativa.
+//
+// BOTÃO "ALTERAR FILA" REMOVIDO DESTA TOOLBAR:
+//   O botão ph-clipboard-text ("Alterar fila / atendente") foi movido para a
+//   barra do atendimento (AtendimentoDetail.jsx / ChatTicketsDashboardComponent).
+//
 // Doc: de-para/02-componentes.md
 // =====================================================================
 const ConversaPanel = ({
@@ -129,36 +139,24 @@ const ConversaPanel = ({
           )}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-          <ToolbarBtn
-            icon="ph-link-simple"
-            onClick={() => setLinkModalOpen(true)}
-            title="Vincular conversa a outro atendimento"
-          />
-          <ToolbarBtn
-            icon="ph-user"
-            onClick={() => onOpenContact?.(contact)}
-            title={`Ver dados do contato${contact?.name ? " — " + contact.name : ""}`}
-          />
-          <ToolbarBtn
-            icon="ph-clipboard-text"
-            onClick={() => onChangeQueue?.()}
-            title="Alterar fila / atendente"
-          />
-          <CCMTooltip label={isFinalized ? "Conversa finalizada" : "Finalizar conversa"}>
-            <button
-              aria-label={isFinalized ? "Conversa finalizada" : "Finalizar conversa"}
-              disabled={isFinalized}
-              onClick={() => !isFinalized && setConfirmFinalize(true)}
-              style={{
-                width: 32, height: 32, borderRadius: 8, border: 0,
-                background: isFinalized ? c.borderSoft : c.successPure,
-                color: isFinalized ? c.fg3 : "#fff",
-                cursor: isFinalized ? "not-allowed" : "pointer",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                marginLeft: 4,
-                opacity: isFinalized ? 0.7 : 1,
-              }}><i className="ph-fill ph-check" style={{ fontSize: 16 }} /></button>
-          </CCMTooltip>
+          {tab !== "Contato" && tab !== "Histórico" && (
+            <React.Fragment>
+              <ToolbarBtn
+                icon="ph-link-simple"
+                onClick={() => setLinkModalOpen(true)}
+                title="Vincular conversa a outro atendimento"
+              />
+              <ToolbarBtn
+                icon="ph-user"
+                onClick={() => onOpenContact?.(contact)}
+                title={`Ver dados do contato${contact?.name ? " — " + contact.name : ""}`}
+              />
+              <FinalizeBtn
+                isFinalized={isFinalized}
+                onClick={() => !isFinalized && setConfirmFinalize(true)}
+              />
+            </React.Fragment>
+          )}
           <ToolbarBtn icon={expanded ? "ph-arrows-in" : "ph-arrows-out"} onClick={onToggleExpand} title="Expandir" />
         </div>
       </div>
@@ -434,6 +432,33 @@ const ToolbarBtn = ({ icon, onClick, title }) => {
           color: c.fg2, cursor: "pointer",
           display: "flex", alignItems: "center", justifyContent: "center",
         }}><i className={`ph ${icon}`} style={{ fontSize: 16 }} /></button>
+    </CCMTooltip>
+  );
+};
+
+// Botão "Finalizar conversa" no mesmo padrão do ToolbarBtn (ghost + hover),
+// só que com o check em verde pra sinalizar que é ação positiva. Fica cinza
+// e desabilitado quando a conversa já está finalizada.
+const FinalizeBtn = ({ isFinalized, onClick }) => {
+  const c = window.CCM.c;
+  const [hover, setHover] = React.useState(false);
+  const label = isFinalized ? "Conversa finalizada" : "Finalizar conversa";
+  return (
+    <CCMTooltip label={label}>
+      <button
+        type="button"
+        aria-label={label}
+        disabled={isFinalized}
+        onClick={onClick}
+        onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
+        style={{
+          width: 32, height: 32, borderRadius: 8, border: 0,
+          background: hover && !isFinalized ? c.borderSoft : "transparent",
+          color: isFinalized ? c.fg3 : c.successPure,
+          cursor: isFinalized ? "not-allowed" : "pointer",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          opacity: isFinalized ? 0.6 : 1,
+        }}><i className="ph ph-check" style={{ fontSize: 16 }} /></button>
     </CCMTooltip>
   );
 };
@@ -1094,25 +1119,8 @@ const LinkConversaModal = ({ convId, currentAtendimentoId, onClose, onLinked, on
                             {ct.name} · {ct.email}
                           </div>
                         </div>
-                        <CCMTooltip label="Visualizar atendimento (somente leitura)">
-                          <button
-                            type="button"
-                            onClick={() => setPreviewId(at.id)}
-                            aria-label="Visualizar atendimento"
-                            style={{
-                              width: 30, height: 30, border: `1px solid ${c.border}`,
-                              background: "#fff", color: c.fg2, borderRadius: 8,
-                              cursor: "pointer", flexShrink: 0,
-                              display: "inline-flex", alignItems: "center", justifyContent: "center",
-                              fontFamily: "Montserrat, sans-serif",
-                              transition: "background 120ms ease, color 120ms ease, border-color 120ms ease",
-                            }}
-                            onMouseEnter={e => { e.currentTarget.style.background = c.primaryLightest; e.currentTarget.style.color = c.primary; e.currentTarget.style.borderColor = c.primary; }}
-                            onMouseLeave={e => { e.currentTarget.style.background = "#fff"; e.currentTarget.style.color = c.fg2; e.currentTarget.style.borderColor = c.border; }}
-                          >
-                            <i className="ph ph-eye" style={{ fontSize: 14 }} />
-                          </button>
-                        </CCMTooltip>
+                        {/* Botão "Visualizar atendimento (somente leitura)" escondido a
+                            pedido — handler setPreviewId segue vivo pra reativar. */}
                         <button
                           type="button"
                           onClick={() => onLinked?.(at.id)}

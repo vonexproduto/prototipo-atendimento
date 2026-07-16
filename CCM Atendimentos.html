@@ -26,15 +26,15 @@
 <script src="src/tokens.js?v=3"></script>
 <script src="src/data.js?v=4"></script>
 <script src="src/demo-router.js"></script>
-<script type="text/babel" src="src/Tooltip.jsx?v=2"></script>
+<script type="text/babel" src="src/Tooltip.jsx?v=3"></script>
 <script type="text/babel" src="src/SettingsMenu.jsx?v=5"></script>
 <script type="text/babel" src="src/Header.jsx?v=3"></script>
-<script type="text/babel" src="src/QueueSidebar.jsx?v=28"></script>
-<script type="text/babel" src="src/AtendimentosList.jsx?v=28"></script>
-<script type="text/babel" src="src/ConversaPanel.jsx?v=15"></script>
-<script type="text/babel" src="src/AtendimentoDetail.jsx?v=20"></script>
+<script type="text/babel" src="src/QueueSidebar.jsx?v=34"></script>
+<script type="text/babel" src="src/AtendimentosList.jsx?v=35"></script>
+<script type="text/babel" src="src/ConversaPanel.jsx?v=17"></script>
+<script type="text/babel" src="src/AtendimentoDetail.jsx?v=23"></script>
 <script type="text/babel" src="src/ContatoHistoricoPeek.jsx?v=6"></script>
-<script type="text/babel" src="src/JornadasView.jsx?v=3"></script>
+<script type="text/babel" src="src/JornadasView.jsx?v=20"></script>
 <!-- DashboardView removido: ícone "Relatórios" segue visível no rail, mas a rota não está acessível -->
 <!-- <script type="text/babel" src="src/DashboardView.jsx?v=1"></script> -->
 
@@ -216,6 +216,16 @@ const App = () => {
     const switchQueueAndClose = (id) => { setActiveQueue(id); setOpenAtendimento(null); };
     const switchAtendimento = (id) => setOpenAtendimento(prev => prev ? { ...prev, id } : { id, mode: "fullscreen" });
 
+    // "Landing" de Favoritos sem nada favoritado: ao clicar numa fila na
+    // sidebar, troca pro escopo "all" pra o usuário ver os atendimentos e
+    // poder favoritar. Pra voltar ao empty state de Favoritos, basta
+    // clicar de novo na estrela do segmented control.
+    const noFavoritesYet = viewScope === "favorites" && favoritedIds.size === 0;
+    const handleSelectQueueFromSidebar = (id) => {
+      if (noFavoritesYet) setViewScope("all");
+      setActiveQueue(id);
+    };
+
     if (openAtendimento?.mode === "fullscreen") {
       return (
         <AtendimentoDetail
@@ -232,8 +242,8 @@ const App = () => {
     return (
       <React.Fragment>
         <QueueSidebar
-          activeQueueId={activeQueue}
-          onSelectQueue={setActiveQueue}
+          activeQueueId={noFavoritesYet ? null : activeQueue}
+          onSelectQueue={handleSelectQueueFromSidebar}
           chatTab={chatTab}
           onTabChange={handleTabChange}
           onOpenAtendimento={openPeek}

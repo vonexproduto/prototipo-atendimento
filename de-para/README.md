@@ -75,8 +75,10 @@ Detalhes (sub-componentes, modais, popovers, props) em
    Tabela completa em [`01-design-tokens.md`](01-design-tokens.md).
 2. **Grafia `secundary`** (sem o segundo "a"). É assim no Angular
    (`--brand-color-secundary-*`, `.color-secondary-*` nas classes). Preserve.
-3. **Ícones.** O protótipo usa Phosphor (`ph-*`). O `ngx-ccm` tem o próprio set;
-   não copie os nomes `ph-*` — peça o equivalente ao time de front.
+3. **Ícones.** O protótipo e o Angular usam **Phosphor Icons** (`@phosphor-icons/web`).
+   Os nomes `ph-*` do protótipo podem ser reaproveitados diretamente. Três pesos:
+   `ph ph-` (regular), `ph-light ph-` (light), `ph-bold ph-` (bold). Exceção:
+   ícones RCS usam icomoon custom (`icon-ph-rcs`).
 
 ---
 

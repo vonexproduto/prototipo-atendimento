@@ -81,6 +81,43 @@ const IconLabelButton = ({ icon, label, hovered, onHoverChange, active, onClick,
   );
 };
 
+// ─────────────────────────────────────────────
+// Filtros avançados — modelo compartilhado entre o FiltersPanel (entrada),
+// a lista (displayedAtendimentos) e os chips de filtros aplicados. Hoje o
+// painel ALIMENTA a lista de fato (antes era estado morto, só visual).
+// No Angular: ChatDashAdvancedFiltersModalComponent emite (filtersChange)
+// e o componente-lista materializa o filtro + a barra de chips.
+// ─────────────────────────────────────────────
+const EMPTY_FILTERS = {
+  id: "", nome: "", telefone: "", email: "", cpf: "",
+  dataInicio: null, dataAtualizacao: null,
+  status: [], atendentes: [], sla: [], marcadores: [], ia: [],
+};
+// Opções relativas dos dois dropdowns de data (início / atualização).
+const DATE_OPTIONS = [
+  { v: "hoje",   l: "Hoje" },
+  { v: "7d",     l: "Últimos 7 dias" },
+  { v: "30d",    l: "30 dias" },
+  { v: "60d",    l: "60 dias" },
+  { v: "90d",    l: "90 dias" },
+  { v: "custom", l: "Personalizado" },
+];
+const DATE_LABELS   = Object.fromEntries(DATE_OPTIONS.map(o => [o.v, o.l]));
+const STATUS_LABELS = { andamento: "Em andamento", finalizado: "Finalizado" };
+const SLA_LABELS    = { ok: "Em andamento", proximo: "Próximo ao prazo", atras: "Atrasado" };
+const IA_LABELS     = { sim: "Redirecionado por I.A.", nao: "Não redirecionado por I.A." };
+
+// Bucketização — mapeia o valor cru do atendimento para a opção do filtro.
+// Status reais nos dados: Aberta/Aberto/Pendente/Encerrado/Finalizada…
+const statusBucket = (s) => /finaliz|encerr|cancel/i.test(s || "") ? "finalizado" : "andamento";
+// slaTagToMinutes: "-1d" → -1440, "+3h" → 180. <0 atrasado, ≤6h próximo, senão ok.
+const slaBucket = (tag) => {
+  const m = window.CCM.slaTagToMinutes(tag);
+  if (m < 0)    return "atras";
+  if (m <= 360) return "proximo";
+  return "ok";
+};
+
 const AtendimentosList = ({
   queue, queues, onSelectQueue, onOpenAtendimento,
   viewScope = "all",
@@ -89,6 +126,12 @@ const AtendimentosList = ({
   // Favoritos e SLA são opções mutuamente exclusivas do segmented control.
   const favoritesOnly = viewScope === "favorites";
   const isSlaMode = viewScope === "sla";
+  // "Landing" do modo favoritos: usuário acabou de clicar na estrela mas
+  // ainda não favoritou nada. Neste estado o breadcrumb não tem caminho
+  // (substituído por um título "Favoritos") e a área principal mostra o
+  // empty state explicativo. Após existir ao menos 1 favorito, a UI
+  // volta ao comportamento normal por fila.
+  const noFavoritesYet = favoritesOnly && favoritedIds && favoritedIds.size === 0;
   const c = window.CCM.c;
   const D = window.CCM_DATA;
   const demo = window.CCM_DEMO_STATE || {};
@@ -105,6 +148,7 @@ const AtendimentosList = ({
   // Direção default por coluna (quando o usuário acabou de abrir o modal pela 1ª vez)
   const DEFAULT_SORT_DIRECTION = {
     marcador: "asc", dataInicio: "desc", dataAtualizacao: "desc", sla: "asc",
+    semResposta: "desc",
   };
   // SLA mode sem sortConfig explícito → assume sort por SLA
   const effectiveSortConfig = sortConfig
@@ -119,6 +163,11 @@ const AtendimentosList = ({
   const [statusOverrides, setStatusOverrides] = React.useState({}); // { [id]: newStatus }
   const [hoveredBtn, setHoveredBtn] = React.useState(null);
   const searchRef = React.useRef(null);
+
+  // Filtros avançados — estado elevado do FiltersPanel pra cá. O painel é
+  // controlado por estas props; a lista (displayedAtendimentos) e os chips
+  // consomem o mesmo objeto. Ver EMPTY_FILTERS no topo do arquivo.
+  const [filters, setFilters] = React.useState(EMPTY_FILTERS);
 
   // Recurso "Transferir por I.A." — só na fila "Sem fila específica".
   // Modal de confirmação + set de IDs marcados como transferidos +
@@ -184,8 +233,28 @@ const AtendimentosList = ({
     return formatAtendimentoDate(new Date(ms + offsetHours * 3600 * 1000));
   };
 
+  // "Sem resposta" = ao menos uma conversa NÃO finalizada cuja última
+  // mensagem é do contato (o atendente ainda não respondeu).
+  const hasSemResposta = (a) => {
+    const convs = Array.isArray(a.conversas) ? a.conversas : [];
+    return convs.some(cv => {
+      if (cv.status === "Finalizada") return false;
+      const msgs = Array.isArray(cv.messages) ? cv.messages : [];
+      for (let i = msgs.length - 1; i >= 0; i--) {
+        const m = msgs[i];
+        if (!m || m.type || !m.role) continue; // ignora system/type-only
+        return m.role === "contact";
+      }
+      return false;
+    });
+  };
+
   const sortByColumn = (arr, column, direction = "asc") => {
     const mult = direction === "desc" ? -1 : 1;
+    if (column === "semResposta") {
+      // desc = sem resposta primeiro (true=1) · asc = respondidos primeiro
+      return [...arr].sort((a, b) => mult * ((hasSemResposta(b) ? 1 : 0) - (hasSemResposta(a) ? 1 : 0)));
+    }
     if (column === "marcador") {
       return [...arr].sort((a, b) => {
         const am = a.marcadores?.[0]?.label || "zzz_sem_marcador";
@@ -226,6 +295,47 @@ const AtendimentosList = ({
     if (favoritesOnly && favoritedIds) {
       src = src.filter(a => favoritedIds.has(a.id));
     }
+
+    // ── Filtros avançados (FiltersPanel) ──────────────────────────────
+    // Texto: id/nome por substring; telefone/cpf comparam só os dígitos
+    // (ignoram máscara); email por substring. Datas: janela relativa
+    // ancorada na data MAIS RECENTE do dataset (no Angular vira Date.now()).
+    {
+      const F = filters;
+      const norm   = (s) => String(s ?? "").toLowerCase();
+      const digits = (s) => String(s ?? "").replace(/\D/g, "");
+      if (F.id)   src = src.filter(a => norm(a.id).includes(norm(F.id)));
+      if (F.nome) src = src.filter(a => norm(a.titulo).includes(norm(F.nome)));
+      if (F.telefone) { const q = digits(F.telefone); src = src.filter(a => (a.contatos || []).some(ct => digits(ct.phone).includes(q))); }
+      if (F.email)    { const q = norm(F.email);      src = src.filter(a => (a.contatos || []).some(ct => norm(ct.email).includes(q))); }
+      if (F.cpf)      { const q = digits(F.cpf);       src = src.filter(a => (a.contatos || []).some(ct => digits(ct.cpf).includes(q))); }
+
+      if (F.dataInicio || F.dataAtualizacao) {
+        const dayStart = (ms) => { const d = new Date(ms); d.setHours(0, 0, 0, 0); return d.getTime(); };
+        const inWindow = (ms, opt, anchor) => {
+          if (!ms) return false;
+          if (opt === "custom") return true; // range custom: sem datepicker no protótipo
+          if (opt === "hoje")   return dayStart(ms) === dayStart(anchor);
+          const days = { "7d": 7, "30d": 30, "60d": 60, "90d": 90 }[opt];
+          return days ? (ms >= anchor - days * 86400000 && ms <= anchor) : true;
+        };
+        if (F.dataInicio) {
+          const anchor = Math.max(0, ...src.map(a => parseAtendimentoDate(a.dataInicio)));
+          src = src.filter(a => inWindow(parseAtendimentoDate(a.dataInicio), F.dataInicio, anchor));
+        }
+        if (F.dataAtualizacao) {
+          const anchor = Math.max(0, ...src.map(a => parseAtendimentoDate(getDataAtualizacao(a))));
+          src = src.filter(a => inWindow(parseAtendimentoDate(getDataAtualizacao(a)), F.dataAtualizacao, anchor));
+        }
+      }
+
+      if (F.status.length)     src = src.filter(a => F.status.includes(statusBucket(a.status)));
+      if (F.atendentes.length) src = src.filter(a => (a.atendentes || []).some(at => F.atendentes.includes(at.name)));
+      if (F.sla.length)        src = src.filter(a => F.sla.includes(slaBucket(a.slaTag)));
+      if (F.marcadores.length) src = src.filter(a => (a.marcadores || []).some(m => F.marcadores.includes(m.label)));
+      if (F.ia.length)         src = src.filter(a => F.ia.includes(iaTransferredIds.has(a.id) ? "sim" : "nao"));
+    }
+
     // Ordenação unificada — modo SLA tem default implícito (column:"sla", asc, all)
     // mas o usuário pode sobrescrever pela própria modal da coluna SLA.
     const cfg = effectiveSortConfig;
@@ -236,7 +346,7 @@ const AtendimentosList = ({
       return [...sortByColumn(head, cfg.column, cfg.direction), ...tail];
     }
     return src;
-  }, [D.atendimentos, effectiveSortConfig, statusOverrides, viewScope, D.attendant?.id, favoritesOnly, favoritedIds, queue, D.queues]);
+  }, [D.atendimentos, effectiveSortConfig, statusOverrides, viewScope, D.attendant?.id, favoritesOnly, favoritedIds, queue, D.queues, filters, iaTransferredIds]);
 
   React.useEffect(() => {
     const onClick = (e) => {
@@ -262,6 +372,27 @@ const AtendimentosList = ({
     return { bg: "#e6f3e5", fg: "#4eaf51" };
   };
 
+  // Chips dos filtros aplicados — um por valor (multi-select vira N chips),
+  // cada um com X pra remover só aquele. A vassoura no fim limpa todos.
+  const filterChips = (() => {
+    const F = filters, out = [];
+    const set = (patch) => setFilters(f => ({ ...f, ...patch }));
+    const removeFrom = (key, v) => setFilters(f => ({ ...f, [key]: f[key].filter(x => x !== v) }));
+    if (F.id)       out.push({ key: "id",    prefix: "ID",         value: F.id,       onRemove: () => set({ id: "" }) });
+    if (F.nome)     out.push({ key: "nome",  prefix: "Nome",       value: F.nome,     onRemove: () => set({ nome: "" }) });
+    if (F.telefone) out.push({ key: "tel",   prefix: "Telefone",   value: F.telefone, onRemove: () => set({ telefone: "" }) });
+    if (F.email)    out.push({ key: "email", prefix: "Email",      value: F.email,    onRemove: () => set({ email: "" }) });
+    if (F.cpf)      out.push({ key: "cpf",   prefix: "CPF",        value: F.cpf,      onRemove: () => set({ cpf: "" }) });
+    if (F.dataInicio)      out.push({ key: "di", prefix: "Início",      value: DATE_LABELS[F.dataInicio],      onRemove: () => set({ dataInicio: null }) });
+    if (F.dataAtualizacao) out.push({ key: "da", prefix: "Atualização", value: DATE_LABELS[F.dataAtualizacao], onRemove: () => set({ dataAtualizacao: null }) });
+    F.status.forEach(v     => out.push({ key: "st-" + v,  prefix: "Status",    value: STATUS_LABELS[v] || v, onRemove: () => removeFrom("status", v) }));
+    F.atendentes.forEach(v => out.push({ key: "at-" + v,  prefix: "Atendente", value: v,                     onRemove: () => removeFrom("atendentes", v) }));
+    F.sla.forEach(v        => out.push({ key: "sla-" + v, prefix: "SLA",       value: SLA_LABELS[v] || v,    onRemove: () => removeFrom("sla", v) }));
+    F.marcadores.forEach(v => out.push({ key: "mc-" + v,  prefix: "Marcador",  value: v,                     onRemove: () => removeFrom("marcadores", v) }));
+    F.ia.forEach(v         => out.push({ key: "ia-" + v,  prefix: "I.A.",      value: IA_LABELS[v] || v,     onRemove: () => removeFrom("ia", v) }));
+    return out;
+  })();
+
   return (
     <section style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, overflow: "hidden", position: "relative" }}>
 
@@ -278,7 +409,8 @@ const AtendimentosList = ({
           display: "flex", alignItems: "center", justifyContent: "space-between",
           gap: 16,
         }}>
-          {/* Breadcrumb — esconde no modo SLA (view global cross-fila) e mostra
+          {/* Breadcrumb — esconde no modo SLA (view global cross-fila) e
+              também no "landing" de Favoritos sem favoritos ainda, mostrando
               um título dedicado no lugar. */}
           <div style={{ minWidth: 0, flex: 1 }}>
             {isSlaMode ? (
@@ -292,6 +424,18 @@ const AtendimentosList = ({
                   fontSize: 10, fontWeight: 700, padding: "3px 8px", borderRadius: 999,
                   textTransform: "uppercase", letterSpacing: "0.04em",
                 }}>visão global</span>
+              </div>
+            ) : noFavoritesYet ? (
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <i className="ph-fill ph-star" style={{ fontSize: 20, color: "#f5a623" }} />
+                <span style={{ fontSize: 15, fontWeight: 700, color: c.fg1 }}>
+                  Favoritos
+                </span>
+                <span style={{
+                  background: "#fff4e0", color: "#a8660a",
+                  fontSize: 10, fontWeight: 700, padding: "3px 8px", borderRadius: 999,
+                  textTransform: "uppercase", letterSpacing: "0.04em",
+                }}>sem favoritos</span>
               </div>
             ) : (
               <QueueBreadcrumb queue={queue} queues={queues} onSelectQueue={onSelectQueue} />
@@ -385,7 +529,8 @@ const AtendimentosList = ({
               label="Novo atendimento"
               hovered={hoveredBtn === "novo"}
               onHoverChange={(h) => setHoveredBtn(h ? "novo" : null)}
-              onClick={() => setNovoAtendimentoOpen(true)}
+              /* Ação desativada a pedido — mantém só affordance visual + tooltip. */
+              onClick={() => {}}
               variant="primary"
             />
           </div>
@@ -394,6 +539,56 @@ const AtendimentosList = ({
 
       {/* ── Content area ── */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", padding: "16px 24px 16px", position: "relative" }}>
+        {/* Chips dos filtros avançados aplicados + vassoura "limpar tudo" */}
+        {filterChips.length > 0 && (
+          <div style={{
+            display: "flex", alignItems: "center", flexWrap: "wrap", gap: 8,
+            marginBottom: 12, flexShrink: 0,
+          }}>
+            {filterChips.map(ch => (
+              <span key={ch.key} style={{
+                display: "inline-flex", alignItems: "center", gap: 6,
+                height: 28, padding: "0 4px 0 12px", maxWidth: 300,
+                background: c.primaryLightest, border: `1px solid ${c.primaryLight}`,
+                borderRadius: 999, fontSize: 12, color: c.primary, fontWeight: 600,
+              }}>
+                <span style={{ color: c.fg2, fontWeight: 500, flexShrink: 0 }}>{ch.prefix}:</span>
+                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ch.value}</span>
+                <button
+                  onClick={ch.onRemove}
+                  aria-label={`Remover filtro ${ch.prefix}`}
+                  style={{
+                    width: 20, height: 20, flexShrink: 0, border: 0, borderRadius: "50%",
+                    background: "transparent", color: c.primary, cursor: "pointer",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.background = "rgba(146,64,255,0.16)"; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
+                >
+                  <i className="ph ph-x" style={{ fontSize: 11 }} />
+                </button>
+              </span>
+            ))}
+            <CCMTooltip label="Limpar todos os filtros">
+              <button
+                onClick={() => setFilters(EMPTY_FILTERS)}
+                aria-label="Limpar todos os filtros"
+                style={{
+                  display: "inline-flex", alignItems: "center", gap: 6,
+                  height: 28, padding: "0 14px",
+                  background: "#fff", border: `1px solid ${c.border}`, borderRadius: 999,
+                  fontSize: 12, color: c.fg2, fontWeight: 600, cursor: "pointer",
+                  fontFamily: "Montserrat, sans-serif",
+                }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = c.primary; e.currentTarget.style.color = c.primary; }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = c.border; e.currentTarget.style.color = c.fg2; }}
+              >
+                <i className="ph ph-broom" style={{ fontSize: 15 }} />
+                Limpar
+              </button>
+            </CCMTooltip>
+          </div>
+        )}
         {viewMode === "kanban" && (
           <KanbanView
             atendimentos={displayedAtendimentos}
@@ -418,7 +613,7 @@ const AtendimentosList = ({
 
           {/* ── Scrollable table (both axes) ── */}
           <div style={{ flex: 1, overflow: "auto", minHeight: 0 }}>
-            {demo.loadingTable ? <LoadingSkeleton /> : (demo.emptyQueue || displayedAtendimentos.length === 0) ? <EmptyState /> : (
+            {demo.loadingTable ? <LoadingSkeleton /> : (demo.emptyQueue || displayedAtendimentos.length === 0) ? <EmptyState favoritesOnly={noFavoritesYet} /> : (
             <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 960 }}>
               <thead>
                 <tr style={{ background: "#fafbfd", position: "sticky", top: 0, zIndex: 3 }}>
@@ -426,9 +621,9 @@ const AtendimentosList = ({
                     const slaCol = { label: "SLA", column: "sla", sort: true, onClick: () => setSortModalOpen("sla"), active: effectiveSortConfig?.column === "sla" };
                     return [
                       { label: "ID" },
-                      // No modo SLA, SLA vai pra 2ª coluna (logo após ID) e some do final
+                      { label: "Sem resposta",     column: "semResposta",     sort: true, onClick: () => setSortModalOpen("semResposta"),     active: effectiveSortConfig?.column === "semResposta" },
+                      // No modo SLA, SLA vai pra 3ª coluna (logo após Sem resposta) e some do final
                       ...(isSlaMode ? [slaCol] : []),
-                      { label: "Nome" },
                       ...(isSlaMode ? [
                         { label: "Operação" },
                         { label: "Fila" },
@@ -513,8 +708,22 @@ const AtendimentosList = ({
                           {a.id}
                         </span>
                       </td>
+                      <td style={{ padding: "12px 16px", whiteSpace: "nowrap" }}>
+                        {hasSemResposta(a) ? (
+                          <span style={{
+                            background: "#ffe4c4", color: "#c45a0c",
+                            fontSize: 11, fontWeight: 700,
+                            padding: "3px 10px", borderRadius: 999,
+                            display: "inline-flex", alignItems: "center", gap: 5,
+                          }}>
+                            <i className="ph-fill ph-warning-circle" style={{ fontSize: 12 }} />
+                            Sem resposta
+                          </span>
+                        ) : (
+                          <span style={{ fontSize: 12, color: c.fg3 }}>—</span>
+                        )}
+                      </td>
                       {isSlaMode && slaTd}
-                      <td style={{ padding: "12px 16px", fontSize: 13, color: c.fg1, maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.titulo.split("—")[0].trim()}</td>
                       {isSlaMode && (() => {
                         const chain = window.CCM.queueChainForAtendimento(a.id, D.queues);
                         const op = chain?.operacao;
@@ -740,7 +949,7 @@ const AtendimentosList = ({
       )}
 
       {/* Filtros avançados — drawer at section level, covers local header too */}
-      {filtersOpen && <FiltersPanel onClose={() => setFiltersOpen(false)} />}
+      {filtersOpen && <FiltersPanel filters={filters} onChange={setFilters} onClose={() => setFiltersOpen(false)} />}
 
       {/* Modal de ordenação — serve às 4 colunas: marcador, dataInicio, dataAtualizacao, sla */}
       {sortModalOpen && (
@@ -1527,17 +1736,37 @@ const SearchPreview = ({ query, onPick }) => {
 // ─────────────────────────────────────────────
 // FiltersPanel — slides in from the RIGHT side
 // ─────────────────────────────────────────────
-const FiltersPanel = ({ onClose }) => {
+const FiltersPanel = ({ filters, onChange, onClose }) => {
   const c = window.CCM.c;
   const D = window.CCM_DATA;
   const [openDd, setOpenDd] = React.useState(null);
   const [ddRect, setDdRect] = React.useState(null);
   const [search, setSearch] = React.useState("");
-  const [dateOpt, setDateOpt] = React.useState(null);
-  const [statusF, setStatusF] = React.useState([]);
-  const [slaF, setSlaF] = React.useState([]);
-  const [iaF, setIaF] = React.useState([]);
-  const [marcF, setMarcF] = React.useState([]);
+
+  // Campos de texto: rascunho local; a filtragem só dispara no BLUR (point
+  // click off do campo) ou no Enter — não a cada tecla. Ressincroniza quando
+  // os filtros mudam por fora (ex.: chip removido com o painel aberto).
+  const SEARCH_FIELDS = [
+    { key: "id",       ph: "Pesquisar ID do atendimento" },
+    { key: "nome",     ph: "Pesquisar nome do atendimento" },
+    { key: "telefone", ph: "Pesquisar por telefone do contato" },
+    { key: "email",    ph: "Pesquisar por email do contato" },
+    { key: "cpf",      ph: "Pesquisar por CPF do contato" },
+  ];
+  const [drafts, setDrafts] = React.useState(() => ({
+    id: filters.id, nome: filters.nome, telefone: filters.telefone,
+    email: filters.email, cpf: filters.cpf,
+  }));
+  React.useEffect(() => {
+    setDrafts({
+      id: filters.id, nome: filters.nome, telefone: filters.telefone,
+      email: filters.email, cpf: filters.cpf,
+    });
+  }, [filters.id, filters.nome, filters.telefone, filters.email, filters.cpf]);
+  const commitSearch = (key) => onChange(f => ({ ...f, [key]: (drafts[key] || "").trim() }));
+
+  // Map openDd → chave do array em filters (multi-select).
+  const MULTI_KEY = { status: "status", atend: "atendentes", sla: "sla", marc: "marcadores", ia: "ia" };
 
   // Lista única de marcadores presentes nos dados (pra montar as opções do dropdown).
   // No Angular: virá do endpoint /markers (cache local). label + color.
@@ -1551,8 +1780,7 @@ const FiltersPanel = ({ onClose }) => {
     return [...seen.values()].sort((a, b) => a.label.localeCompare(b.label, "pt-BR"));
   }, [D.atendimentos]);
 
-  const toggle = (arr, setArr, v) =>
-    setArr(arr.includes(v) ? arr.filter(x => x !== v) : [...arr, v]);
+  const toggleArr = (arr, v) => arr.includes(v) ? arr.filter(x => x !== v) : [...arr, v];
 
   const handleTrigger = (id, e) => {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -1565,14 +1793,7 @@ const FiltersPanel = ({ onClose }) => {
   const getOptions = () => {
     const s = search.toLowerCase();
     const f = arr => s ? arr.filter(o => o.l.toLowerCase().includes(s)) : arr;
-    if (openDd === "data") return f([
-      { v: "hoje",   l: "Hoje" },
-      { v: "7d",     l: "Últimos 7 dias" },
-      { v: "30d",    l: "30 dias" },
-      { v: "60d",    l: "60 dias" },
-      { v: "90d",    l: "90 dias" },
-      { v: "custom", l: "Personalizado" },
-    ]);
+    if (openDd === "data" || openDd === "dataAtu") return f(DATE_OPTIONS);
     if (openDd === "status") return f([
       { v: "todos",      l: "Todos" },
       { v: "andamento",  l: "Em andamento" },
@@ -1600,20 +1821,22 @@ const FiltersPanel = ({ onClose }) => {
   };
 
   const isChecked = v => {
-    if (openDd === "data")   return dateOpt === v;
-    if (openDd === "status") return statusF.includes(v);
-    if (openDd === "sla")    return slaF.includes(v);
-    if (openDd === "ia")     return iaF.includes(v);
-    if (openDd === "marc")   return marcF.includes(v);
-    return false;
+    if (openDd === "data")    return filters.dataInicio === v;
+    if (openDd === "dataAtu") return filters.dataAtualizacao === v;
+    const key = MULTI_KEY[openDd];
+    if (!key) return false;
+    if (v === "todos") return filters[key].length === 0; // "Todos" = grupo sem filtro
+    return filters[key].includes(v);
   };
 
   const handleSelect = v => {
-    if (openDd === "data")   { setDateOpt(v); return; }
-    if (openDd === "status") { toggle(statusF, setStatusF, v); return; }
-    if (openDd === "sla")    { toggle(slaF, setSlaF, v); return; }
-    if (openDd === "ia")     { toggle(iaF, setIaF, v); return; }
-    if (openDd === "marc")   { toggle(marcF, setMarcF, v); return; }
+    // Datas são radio: reclicar o mesmo valor limpa o filtro.
+    if (openDd === "data")    { onChange(f => ({ ...f, dataInicio:      f.dataInicio === v ? null : v })); return; }
+    if (openDd === "dataAtu") { onChange(f => ({ ...f, dataAtualizacao: f.dataAtualizacao === v ? null : v })); return; }
+    const key = MULTI_KEY[openDd];
+    if (!key) return;
+    if (v === "todos") { onChange(f => ({ ...f, [key]: [] })); return; } // "Todos" reseta o grupo
+    onChange(f => ({ ...f, [key]: toggleArr(f[key], v) }));
   };
 
   React.useEffect(() => {
@@ -1624,16 +1847,17 @@ const FiltersPanel = ({ onClose }) => {
   }, [openDd]);
 
   const TRIGGERS = [
-    { id: "data",   label: "Data de início" },
-    { id: "status", label: "Status do atendimento" },
-    { id: "atend",  label: "Atendentes" },
-    { id: "sla",    label: "SLA" },
-    { id: "marc",   label: "Marcadores" },
-    { id: "ia",     label: "Redirecionamento por I.A." },
+    { id: "data",    label: "Data de início" },
+    { id: "dataAtu", label: "Data de atualização" },
+    { id: "status",  label: "Status do atendimento" },
+    { id: "atend",   label: "Atendentes" },
+    { id: "sla",     label: "SLA" },
+    { id: "marc",    label: "Marcadores" },
+    { id: "ia",      label: "Redirecionamento por I.A." },
   ];
 
   const options = getOptions();
-  const isRadio = openDd === "data";
+  const isRadio = openDd === "data" || openDd === "dataAtu";
 
   return (
     <div data-fp="1" style={{
@@ -1667,17 +1891,37 @@ const FiltersPanel = ({ onClose }) => {
 
       {/* Scrollable content */}
       <div style={{ flex: 1, overflowY: "auto", padding: "12px 16px 16px" }}>
-        {/* Search inputs */}
-        {["Pesquisar ID do atendimento", "Pesquisar nome do atendimento", "Pesquisar contato"].map(ph => (
-          <div key={ph} style={{
+        {/* Search inputs — filtram a lista no BLUR (point click off) ou Enter */}
+        {SEARCH_FIELDS.map(({ key, ph }) => (
+          <div key={key} style={{
             display: "flex", alignItems: "center", gap: 8, marginBottom: 8,
             border: `1px solid ${c.border}`, borderRadius: 8, padding: "8px 12px", background: "#fff",
           }}>
             <i className="ph ph-magnifying-glass" style={{ fontSize: 14, color: c.fg3, flexShrink: 0 }} />
-            <input placeholder={ph} style={{
-              flex: 1, border: 0, outline: "none", fontFamily: "Montserrat, sans-serif",
-              fontSize: 13, color: c.fg1, background: "transparent",
-            }} />
+            <input
+              placeholder={ph}
+              value={drafts[key]}
+              onChange={e => setDrafts(d => ({ ...d, [key]: e.target.value }))}
+              onBlur={() => commitSearch(key)}
+              onKeyDown={e => { if (e.key === "Enter") e.currentTarget.blur(); }}
+              style={{
+                flex: 1, border: 0, outline: "none", fontFamily: "Montserrat, sans-serif",
+                fontSize: 13, color: c.fg1, background: "transparent",
+              }}
+            />
+            {drafts[key] && (
+              <button
+                onClick={() => { setDrafts(d => ({ ...d, [key]: "" })); onChange(f => ({ ...f, [key]: "" })); }}
+                aria-label="Limpar campo"
+                style={{
+                  width: 18, height: 18, flexShrink: 0, border: 0, borderRadius: "50%",
+                  background: "transparent", color: c.fg3, cursor: "pointer",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                }}
+              >
+                <i className="ph ph-x" style={{ fontSize: 11 }} />
+              </button>
+            )}
           </div>
         ))}
 
@@ -1811,10 +2055,49 @@ const LoadingSkeleton = () => {
 };
 
 // ─────────────────────────────────────────────
-// EmptyState — shown when ?demo=empty (no atendimentos in selected queue)
+// EmptyState — shown when there are no atendimentos to display.
+// Tem 2 variantes:
+//   • favoritesOnly = true  → "Nenhum favorito ainda" + hint pra clicar
+//                              na estrela em um atendimento da lista
+//   • caso contrário        → "Nenhum atendimento nesta fila" + CTA
+//                              de criar atendimento manual (default)
 // ─────────────────────────────────────────────
-const EmptyState = () => {
+const EmptyState = ({ favoritesOnly = false }) => {
   const c = window.CCM.c;
+
+  if (favoritesOnly) {
+    // Cor da estrela favorita = #f5a623 (mesmo tom do segmented control)
+    const starColor = "#f5a623";
+    const starBg = "#fff4e0";
+    return (
+      <div style={{
+        flex: 1, height: "100%",
+        display: "flex", flexDirection: "column",
+        alignItems: "center", justifyContent: "center",
+        padding: 48, textAlign: "center",
+      }}>
+        <div style={{
+          width: 72, height: 72, borderRadius: "50%",
+          background: starBg, color: starColor,
+          display: "flex", alignItems: "center", justifyContent: "center",
+          marginBottom: 18,
+        }}>
+          <i className="ph-fill ph-star" style={{ fontSize: 32 }} />
+        </div>
+        <div style={{ fontSize: 16, fontWeight: 600, color: c.fg1, marginBottom: 6 }}>
+          Nenhum favorito ainda
+        </div>
+        <div style={{ fontSize: 13, color: c.fg2, maxWidth: 360, lineHeight: 1.5 }}>
+          Para favoritar um atendimento, clique no ícone de
+          {" "}
+          <i className="ph ph-star" style={{ fontSize: 14, color: starColor, verticalAlign: "middle", margin: "0 2px" }} />
+          {" "}
+          estrela na linha desejada da lista. Os atendimentos favoritos aparecerão aqui.
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={{
       flex: 1, height: "100%",
@@ -1898,6 +2181,17 @@ const COLUMN_SORT_CONFIG = {
     directions: [
       { value: "asc",  title: "Mais atrasados primeiro", desc: "Atendimentos com maior atraso no SLA aparecem antes (mais urgentes)." },
       { value: "desc", title: "Mais atrasados último",   desc: "Atendimentos com SLA mais folgado aparecem antes." },
+    ],
+  },
+  semResposta: {
+    icon: "ph-warning-circle",
+    modalTitle: "Ordenar por sem resposta",
+    description: "Atendimentos com pelo menos uma conversa não finalizada em que a última mensagem é do contato ganham o badge \"Sem resposta\".",
+    actionPage: "Aplica a ordenação apenas nos atendimentos visíveis na página atual. Outras páginas mantêm sua ordem original.",
+    actionAll:  "Aplica a ordenação na lista inteira, independente da paginação. Itens podem mudar de página.",
+    directions: [
+      { value: "desc", title: "Sem resposta primeiro", desc: "Atendimentos com mensagem do contato aguardando resposta aparecem antes." },
+      { value: "asc",  title: "Respondidos primeiro",  desc: "Atendimentos sem mensagens pendentes aparecem antes." },
     ],
   },
 };

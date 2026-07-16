@@ -1,0 +1,1327 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>CCM-3009 — Painel de Conversa (isolado)</title>
+<link rel="stylesheet" href="design-system/colors_and_type.css">
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css">
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/fill/style.css">
+<style>
+  html, body { height: 100%; margin: 0; }
+  body { background: #f2f6fa; font-family: "Montserrat", sans-serif; color: #28293d; overflow: hidden; }
+  #root { height: 100vh; display: flex; flex-direction: column; }
+  button { font-family: "Montserrat", sans-serif; }
+  input, textarea, select { font-family: "Montserrat", sans-serif; }
+  *::-webkit-scrollbar { width: 8px; height: 8px; }
+  *::-webkit-scrollbar-thumb { background: rgba(40,41,61,0.15); border-radius: 8px; }
+  *::-webkit-scrollbar-track { background: transparent; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<!-- Mínimo pra renderizar a visão isolada:
+     tokens/dados/tooltip + ConversaPanel (só pra herdar window.MessageBubble
+     e window.DayChip que reutilizamos na thread; o Composer é próprio desta
+     página, não o do ConversaPanel). -->
+<script src="src/tokens.js?v=3"></script>
+<script src="src/data.js?v=4"></script>
+<script type="text/babel" src="src/Tooltip.jsx?v=3"></script>
+<script type="text/babel" src="src/ConversaPanel.jsx?v=15"></script>
+
+<script type="text/babel">
+// =====================================================================
+// CCM-3009 — Sandbox isolado do Painel de Conversa
+// ---------------------------------------------------------------------
+// Página oculta (só acessível pela URL /CCM-3009). Renderiza APENAS o
+// painel da conversa c100501a — sub-header + thread + composer
+// multicanal. Sem sidebar/header/rail em volta.
+//
+// A partir da CCM-3009, este composer é o alvo da tarefa e tem 6
+// layouts diferentes conforme a aba selecionada. Cada layout é
+// especificado em COMPOSER_LAYOUTS abaixo.
+// =====================================================================
+
+const CH = {
+  WHATSAPP:      "WhatsApp",
+  WHATSAPP_WEB:  "WhatsApp Web",
+  RCS:           "RCS",
+  SMS:           "SMS",
+  EMAIL:         "Email",
+  TORPEDO:       "Torpedo de voz",
+  NOTA:          "Nota interna",
+};
+
+const TABS = [
+  { key: CH.WHATSAPP,     icon: "ph-whatsapp-logo" },
+  { key: CH.WHATSAPP_WEB, icon: "ph-desktop" },
+  { key: CH.RCS,          icon: "ph-chat-text" },
+  { key: CH.SMS,          icon: "ph-chat-circle" },
+  { key: CH.EMAIL,        icon: "ph-envelope" },
+  { key: CH.TORPEDO,      icon: "ph-microphone" },
+  { key: CH.NOTA,         icon: "ph-flag" },
+];
+
+// ─────────────────────────────────────────────────────────────────────
+// Emojis mock — não é biblioteca completa; suficiente pro protótipo
+// (mesma sensação da tela real: seções + grid). No app final, substituir
+// por picker de verdade.
+// ─────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────
+// Mocks de listas por canal — no app real vêm do backend.
+// ─────────────────────────────────────────────────────────────────────
+const PRODUCTS_TORPEDO = ["Torpedo Short", "Torpedo Long", "Torpedo Smart", "Fake Product"];
+const PRODUCTS_SMS     = ["SMS Marketing", "Fake Product", "OTP"];
+const PRODUCTS_WHATSAPP = [
+  { label: "Fake Product",   sub: "79 99150-7382", price: "R$ 1000" },
+  { label: "Produto teste 1", sub: "11 3777-9335", price: "R$ 999" },
+  { label: "Vonex Telecom-1", sub: "11 3777-7627", price: "R$ 999" },
+];
+const WHATSAPP_MODELS = ["Bom dia", "Modelo promocao", "Modelo teste utilidade", "teste link 5", "cancelar marketing", "teste bug"];
+
+// Mock do corpo do template quando um modelo é selecionado (usado no
+// preview da aba WhatsApp após a seleção). O real viria da Meta API.
+const TEMPLATE_MESSAGE =
+`Olá venha conhecer o G1
+https://g1.globo.com/
+Tambem não deixa de conferir
+https://jam.dev/c/1eac5a6b-0fe5-4f81-b107-5909658f14df
+Para verificar clique no botão abaixo, não fica de fora`;
+
+const EMOJIS_RECENT = ["👍","😘","😊","😍","😄","🥰","😆","💪","😂"];
+const EMOJIS_SMILEYS = [
+  "🙂","🙃","😀","😁","😅","😆","🤣","😂","🙂","🙃",
+  "🤗","😇","😉","😊","😍","🥰","😘","😗","😙","😚",
+  "😋","😛","😝","😜","🤪","🤨","🧐","🤓","😎","🥸",
+  "🥳","🤗","🤡","🤠","😏","😒","😞","😔","😟","😕",
+];
+
+// ─────────────────────────────────────────────────────────────────────
+// StandaloneComposer — 6 layouts, um por canal.
+// Cada layout combina 3 "slots":
+//   1) content: banner + dropdown, textarea, dropzone…
+//   2) leftActions: [+, 😊] variando por canal
+//   3) rightActions: dropdown de produto + info (preço, contador) + botão
+//      de envio (mic ou paper-plane; ativo ou disabled)
+//
+// Estados compartilhados entre canais:
+//   • attachOpen — popover "Anexar arquivo" acima do + com input file
+//   • emojiOpen  — popover de emoji picker acima do smiley
+//   • Ambos fecham ao trocar de canal, apertar Esc, ou clicar fora.
+// ─────────────────────────────────────────────────────────────────────
+const PRODUCTS_EMAIL = [
+  { label: "bruna", sub: "", price: "R$ 0,00" },
+];
+
+const StandaloneComposer = ({ channel, onChannelChange }) => {
+  const c = window.CCM.c;
+  const [text, setText] = React.useState("");
+  const [attachOpen, setAttachOpen] = React.useState(false);
+  const [emojiOpen, setEmojiOpen] = React.useState(false);
+  const [attachedFile, setAttachedFile] = React.useState(null);
+  // WhatsApp Web — toggle "Título do atendente" que vive dentro do popover
+  // estendido do +. É apenas visual/local (não afeta lógica real).
+  const [showAttendantTitle, setShowAttendantTitle] = React.useState(true);
+  // Email — toggle entre "Editor de Texto" e "HTML"; estado do campo Cc e Assunto.
+  const [emailEditorMode, setEmailEditorMode] = React.useState("texto");
+  const [emailCc, setEmailCc] = React.useState("");
+  const [emailSubject, setEmailSubject] = React.useState("Re: Nova conversa");
+  const [emailExpanded, setEmailExpanded] = React.useState(false);
+  // Dropdowns de produto/modelo. Uso um único id ("prod" | "model" | null)
+  // pra garantir mutuamente exclusivos.
+  const [dropdownOpen, setDropdownOpen] = React.useState(null);
+  // Auto-hide: quando o mouse NÃO está sobre o composer (e nada dentro dele
+  // está focado), o corpo colapsa e só as orelhinhas ficam visíveis. Se
+  // qualquer popover/dropdown está aberto, também forçamos a permanecer
+  // aberto pra evitar fechar ao mover o mouse pra dentro dele.
+  //
+  // Pin e resize são INDEPENDENTES:
+  //   • pinned: desativa o auto-hide (barra fica sempre visível).
+  //   • textareaH: altura fixa do textarea em px. Se null, usa auto-resize
+  //     baseado no conteúdo. Vale independentemente do pin.
+  //   • Se o usuário arrasta abaixo do mínimo, textareaH volta a null
+  //     (auto-resize) e também desafixa se estiver pinned.
+  //   • dragging: mantém o composer aberto enquanto o mouse pode sair
+  //     durante o arrasto sem colapsar o composer.
+  const [hovered, setHovered] = React.useState(false);
+  const [focused, setFocused] = React.useState(false);
+  const [pinned, setPinned] = React.useState(false);
+  const [textareaH, setTextareaH] = React.useState(null);
+  const [dragging, setDragging] = React.useState(false);
+  // `textareaH !== null` (resize manual ativo) também mantém o composer
+  // aberto: senão, ao soltar um arrasto pra cima com o mouse já fora da
+  // área, composerOpen viraria false no mouseup e o corpo colapsaria na
+  // hora — dava a impressão de que "o resize não sobe".
+  const composerOpen = pinned || hovered || focused || dragging
+    || textareaH !== null
+    || attachOpen || emojiOpen || dropdownOpen !== null;
+
+  // Durante a animação de abrir/fechar, o wrapper precisa de overflow:hidden
+  // pra recortar o corpo enquanto desliza; DEPOIS que abre, precisa
+  // overflow:visible pra dropdowns/popovers não serem cortados.
+  const [clip, setClip] = React.useState(true);
+  React.useEffect(() => {
+    if (composerOpen) {
+      const t = setTimeout(() => setClip(false), 520);
+      return () => clearTimeout(t);
+    }
+    setClip(true);
+  }, [composerOpen]);
+  const fileInputRef = React.useRef(null);
+  const attachWrapRef = React.useRef(null);
+  const emojiWrapRef = React.useRef(null);
+  const dropdownWrapRef = React.useRef(null);
+  const textareaRef = React.useRef(null);
+  const outerRef = React.useRef(null);
+
+  // Altura máxima do textarea = ~50% da "seção" (o painel que contém
+  // header + thread + composer), descontando o cromo do composer (tabs +
+  // banner + action row). Assim tanto o crescimento por conteúdo quanto o
+  // arrasto manual param quando a área chega a metade da seção. Piso de
+  // 120px pra telas baixas.
+  const RESIZE_MIN = 40;
+  const COMPOSER_CHROME = 100;
+  const getMaxTextareaH = () => {
+    const section = outerRef.current?.parentElement?.offsetHeight || window.innerHeight;
+    return Math.max(120, Math.floor(section * 0.5) - COMPOSER_CHROME);
+  };
+
+  // Resize do textarea:
+  //   • textareaH === null → auto-resize por conteúdo (1 linha vazio,
+  //     cresce com o texto), capado em getMaxTextareaH(). Depois vira
+  //     scroll interno.
+  //   • textareaH !== null → altura fixa definida pelo arrasto manual,
+  //     também capada no máximo.
+  React.useLayoutEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    const max = getMaxTextareaH();
+    if (textareaH !== null) {
+      el.style.height = Math.min(textareaH, max) + "px";
+    } else {
+      el.style.height = "auto";
+      el.style.height = Math.min(el.scrollHeight, max) + "px";
+    }
+  });
+
+  // Início do drag da borda superior do composer. Funciona pinned ou não —
+  // pin é responsabilidade separada (só desativa o auto-hide). Funciona
+  // mesmo com o textarea vazio (parte da altura atual). Se cair abaixo do
+  // RESIZE_MIN, volta ao auto-resize (textareaH = null) e desafixa.
+  const startResize = (e) => {
+    // Sem textarea montado (abas WhatsApp/Torpedo) não há o que
+    // redimensionar — ignora. O handle nem é renderizado nesses casos,
+    // mas isso garante robustez.
+    if (!textareaRef.current) return;
+    e.preventDefault();
+    setDragging(true);
+    const startY = e.clientY;
+    const startH = textareaH !== null ? textareaH : (textareaRef.current?.offsetHeight || 36);
+    const RESIZE_MAX = getMaxTextareaH();
+    const onMove = (mv) => {
+      const dy = startY - mv.clientY;
+      const next = startH + dy;
+      if (next < RESIZE_MIN) {
+        setTextareaH(null);
+        setPinned(false);
+        setDragging(false);
+        document.removeEventListener("mousemove", onMove);
+        document.removeEventListener("mouseup", onUp);
+        return;
+      }
+      setTextareaH(Math.min(next, RESIZE_MAX));
+    };
+    const onUp = () => {
+      setDragging(false);
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+    };
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+  };
+
+  // Fecha popovers ao trocar de canal. A altura manual do textarea
+  // (textareaH) NÃO é resetada aqui — o usuário quer que ela persista
+  // enquanto navega entre abas. Só é resetada quando o mouse sai do
+  // composer (auto-hide fecha) ou quando o pin é removido.
+  React.useEffect(() => {
+    setAttachOpen(false);
+    setEmojiOpen(false);
+    setDropdownOpen(null);
+  }, [channel]);
+
+  // Reset da altura manual: acontece SÓ quando o mouse realmente sai do
+  // composer (onMouseLeave do wrapper externo, abaixo), nunca como efeito
+  // colateral do composer fechar durante o arrasto. Ver handleMouseLeave.
+
+  // Fecha popovers com Esc e click fora
+  React.useEffect(() => {
+    if (!attachOpen && !emojiOpen && !dropdownOpen) return;
+    const closeAll = () => { setAttachOpen(false); setEmojiOpen(false); setDropdownOpen(null); };
+    const onKey = e => { if (e.key === "Escape") closeAll(); };
+    const onDown = e => {
+      if (attachWrapRef.current   && !attachWrapRef.current.contains(e.target))   setAttachOpen(false);
+      if (emojiWrapRef.current    && !emojiWrapRef.current.contains(e.target))    setEmojiOpen(false);
+      if (dropdownWrapRef.current && !dropdownWrapRef.current.contains(e.target)) setDropdownOpen(null);
+    };
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("mousedown", onDown);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("mousedown", onDown);
+    };
+  }, [attachOpen, emojiOpen, dropdownOpen]);
+
+  // ── Tabs (topo) — "orelinhas" ──────────────────────────────────────
+  //   Cada tab é um retângulo com cantos superiores arredondados; a ativa
+  //   tem fundo branco + borda que se conecta ao conteúdo abaixo (o
+  //   marginBottom: -1 esconde a borda do container por baixo).
+  //   Um botão de pin à direita permite fixar/desafixar o auto-hide.
+  const CCMTooltip = window.CCMTooltip;
+  const renderTabs = () => (
+    <div style={{
+      display: "flex", alignItems: "stretch",
+      padding: "8px 20px 0", borderBottom: `1px solid ${c.border}`,
+      backgroundImage: "url('design-system/assets/backgrounds/bg-chat.svg')",
+      backgroundColor: "#FAF6EE",
+      backgroundRepeat: "repeat",
+      backgroundAttachment: "fixed",
+    }}>
+      <div style={{
+        display: "flex", alignItems: "flex-end", gap: 2,
+        flex: 1, minWidth: 0,
+      }}>
+      {TABS.map(t => {
+        const active = t.key === channel;
+        // Inativa: bg branco com opacidade baixa (deixa a textura amarela vazar);
+        //   hover leva a opacidade pra 1 pra dar feedback claro sem mudar layout.
+        return (
+          <div key={t.key}
+            onClick={() => onChannelChange(t.key)}
+            onMouseEnter={e => { if (!active) e.currentTarget.style.background = "rgba(255,255,255,1)"; }}
+            onMouseLeave={e => { if (!active) e.currentTarget.style.background = "rgba(255,255,255,0.45)"; }}
+            style={{
+              display: "inline-flex", alignItems: "center", gap: 6,
+              padding: "6px 12px", cursor: "pointer",
+              color: active ? c.fg1 : c.fg2,
+              fontSize: 12, fontWeight: active ? 600 : 500,
+              border: `1px solid ${c.border}`,
+              borderBottom: active ? "1px solid #fff" : `1px solid ${c.border}`,
+              borderRadius: "6px 6px 0 0",
+              background: active ? "#fff" : "rgba(255,255,255,0.45)",
+              marginBottom: -1,
+              whiteSpace: "nowrap",
+              transition: "background 120ms ease, color 120ms ease",
+            }}>
+            <i className={`ph ${t.icon}`} style={{ fontSize: 13 }} />
+            {t.key}
+          </div>
+        );
+      })}
+      </div>
+      <CCMTooltip
+        placement="top"
+        label={pinned
+          ? "Clique para desafixar essa barra"
+          : "Clique para fixar essa barra"}
+      >
+        <button
+          onClick={() => {
+            // Ao desafixar, reseta a altura manual — volta ao auto-resize.
+            if (pinned) setTextareaH(null);
+            setPinned(p => !p);
+          }}
+          aria-label={pinned ? "Desafixar composer" : "Fixar composer"}
+          style={{
+            width: 28, height: 28, borderRadius: 6, border: 0,
+            background: pinned ? c.primaryLightest : "transparent",
+            color: pinned ? c.primary : c.fg2, cursor: "pointer",
+            display: "inline-flex", alignItems: "center", justifyContent: "center",
+            alignSelf: "flex-end", marginBottom: 4, marginLeft: 8,
+            transition: "background 150ms ease, color 150ms ease, transform 200ms ease",
+            transform: pinned ? "rotate(-45deg)" : "rotate(0deg)",
+          }}
+        >
+          <i className={pinned ? "ph-fill ph-push-pin" : "ph ph-push-pin"} style={{ fontSize: 15 }} />
+        </button>
+      </CCMTooltip>
+    </div>
+  );
+
+  // ── Botões auxiliares ──────────────────────────────────────────────
+  // PlusBtn — clica pra abrir/fechar popover de anexo; gira 45° virando "X".
+  //   Padrão único em todos os canais: sem fundo, ícone + roxo.
+  //   • extended=true (WhatsApp Web) — popover expandido com "Anexar arquivo"
+  //     + toggle "Título do atendente".
+  const PlusBtn = ({ extended }) => (
+    <div ref={attachWrapRef} style={{ position: "relative", display: "inline-block" }}>
+      <button
+        onClick={() => setAttachOpen(o => !o)}
+        aria-label={attachOpen ? "Fechar anexos" : "Anexar"}
+        style={{
+          width: 32, height: 32, borderRadius: 8, border: 0, cursor: "pointer",
+          background: "transparent",
+          color: c.primary,
+          display: "inline-flex", alignItems: "center", justifyContent: "center",
+          transition: "transform 220ms ease, background 150ms ease, color 150ms ease",
+          transform: attachOpen ? "rotate(45deg)" : "rotate(0deg)",
+        }}>
+        <i className="ph ph-plus" style={{ fontSize: 20, fontWeight: "bold" }} />
+      </button>
+      {attachOpen && (
+        <div style={{
+          position: "absolute", bottom: 42, left: 0,
+          background: "#fff", borderRadius: 10,
+          boxShadow: "0 6px 24px rgba(40,41,61,0.16)",
+          padding: 6, minWidth: extended ? 236 : 176, zIndex: 100,
+        }}>
+          <div
+            onClick={() => { fileInputRef.current?.click(); }}
+            style={{
+              display: "flex", alignItems: "center", gap: 10,
+              padding: "8px 12px", cursor: "pointer",
+              fontSize: 13, color: c.fg1, borderRadius: 6,
+              transition: "background 100ms ease",
+            }}
+            onMouseEnter={e => e.currentTarget.style.background = c.canvas}
+            onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+          >
+            <i className="ph ph-paperclip" style={{ fontSize: 15, color: c.fg2 }} />
+            Anexar arquivo
+          </div>
+          {extended && (
+            <div
+              onClick={() => setShowAttendantTitle(v => !v)}
+              style={{
+                display: "flex", alignItems: "center", gap: 10,
+                padding: "8px 12px", cursor: "pointer",
+                fontSize: 13, color: c.fg1, borderRadius: 6,
+              }}
+              onMouseEnter={e => e.currentTarget.style.background = c.canvas}
+              onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+            >
+              {/* Toggle switch inline */}
+              <span style={{
+                width: 32, height: 18, borderRadius: 999, flexShrink: 0,
+                background: showAttendantTitle ? c.primary : c.borderSoft,
+                position: "relative", transition: "background 150ms ease",
+              }}>
+                <span style={{
+                  position: "absolute", top: 2, left: showAttendantTitle ? 16 : 2,
+                  width: 14, height: 14, borderRadius: "50%",
+                  background: "#fff", transition: "left 150ms ease",
+                  boxShadow: "0 1px 2px rgba(0,0,0,0.2)",
+                }} />
+              </span>
+              <span style={{ flex: 1 }}>Título do atendente</span>
+              <i className="ph ph-info" style={{ fontSize: 14, color: c.fg3 }} />
+            </div>
+          )}
+        </div>
+      )}
+      <input
+        ref={fileInputRef} type="file" style={{ display: "none" }}
+        onChange={e => {
+          const f = e.target.files?.[0];
+          if (f) setAttachedFile(f.name);
+          setAttachOpen(false);
+          e.target.value = "";
+        }}
+      />
+    </div>
+  );
+
+  // EmojiBtn — abre picker; ao clicar num emoji, concatena ao textarea
+  //   e o picker permanece aberto (permite múltiplas inserções).
+  const EmojiBtn = () => (
+    <div ref={emojiWrapRef} style={{ position: "relative", display: "inline-block" }}>
+      <button
+        onClick={() => setEmojiOpen(o => !o)}
+        aria-label="Emojis"
+        style={{
+          width: 32, height: 32, borderRadius: 8, border: 0, cursor: "pointer",
+          background: emojiOpen ? c.borderSoft : "transparent", color: c.fg2,
+          display: "inline-flex", alignItems: "center", justifyContent: "center",
+          transition: "background 120ms ease",
+        }}>
+        <i className="ph ph-smiley" style={{ fontSize: 20 }} />
+      </button>
+      {emojiOpen && (
+        <div style={{
+          position: "absolute", bottom: 42, left: 0,
+          background: "#fff", borderRadius: 12,
+          boxShadow: "0 8px 28px rgba(40,41,61,0.18)",
+          padding: 12, width: 320, zIndex: 100,
+          fontFamily: "'Segoe UI Emoji', 'Apple Color Emoji', Montserrat, sans-serif",
+        }}>
+          <div style={{
+            display: "flex", alignItems: "center", gap: 8, padding: "8px 12px",
+            background: c.canvas, borderRadius: 8, marginBottom: 10,
+          }}>
+            <i className="ph ph-magnifying-glass" style={{ fontSize: 14, color: c.fg3 }} />
+            <input placeholder="Pesquisar emoji" style={{
+              border: 0, outline: "none", flex: 1,
+              fontSize: 13, background: "transparent", color: c.fg1,
+            }} />
+          </div>
+          <div style={{ fontSize: 12, fontWeight: 600, color: c.fg2, marginBottom: 6 }}>
+            Usados Frequentemente
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(8, 1fr)", gap: 2, marginBottom: 12 }}>
+            {EMOJIS_RECENT.map((e, i) => (
+              <div key={i}
+                onClick={() => setText(t => t + e)}
+                style={{
+                  fontSize: 22, textAlign: "center", cursor: "pointer",
+                  padding: 4, borderRadius: 6, lineHeight: 1,
+                }}
+                onMouseEnter={ev => ev.currentTarget.style.background = c.canvas}
+                onMouseLeave={ev => ev.currentTarget.style.background = "transparent"}
+              >{e}</div>
+            ))}
+          </div>
+          <div style={{ fontSize: 12, fontWeight: 600, color: c.fg2, marginBottom: 6 }}>
+            Smileys & Pessoas
+          </div>
+          <div style={{
+            display: "grid", gridTemplateColumns: "repeat(8, 1fr)", gap: 2,
+            maxHeight: 200, overflowY: "auto",
+          }}>
+            {EMOJIS_SMILEYS.map((e, i) => (
+              <div key={i}
+                onClick={() => setText(t => t + e)}
+                style={{
+                  fontSize: 22, textAlign: "center", cursor: "pointer",
+                  padding: 4, borderRadius: 6, lineHeight: 1,
+                }}
+                onMouseEnter={ev => ev.currentTarget.style.background = c.canvas}
+                onMouseLeave={ev => ev.currentTarget.style.background = "transparent"}
+              >{e}</div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  const Divider = () => (
+    <span style={{ width: 1, height: 20, background: c.border, margin: "0 4px" }} />
+  );
+
+  // Dropdown de "produto" — pill que abre lista PRA CIMA ao clicar.
+  //   • options pode ser array de strings (torpedo/sms) OU
+  //     array de { label, sub, price } (WhatsApp com telefone+preço).
+  //   • Selecionar um item atualiza `selectedProduct` (state local do dropdown)
+  //     e fecha o popover.
+  const [selectedProduct, setSelectedProduct] = React.useState(null);
+  const ProductDropdown = ({ placeholder, options, compact, rich }) => {
+    const isOpen = dropdownOpen === "prod";
+    const display = selectedProduct || placeholder;
+    return (
+      <div ref={isOpen ? dropdownWrapRef : null} style={{ position: "relative", display: "inline-block" }}>
+        <button
+          onClick={() => setDropdownOpen(o => o === "prod" ? null : "prod")}
+          style={{
+            display: "inline-flex", alignItems: "center", gap: 6,
+            border: `1px solid ${c.border}`, borderRadius: 999,
+            background: "#fff", color: selectedProduct ? c.fg1 : c.fg2,
+            height: 36, padding: "0 12px",
+            fontSize: 13, fontWeight: 500, cursor: "pointer",
+            maxWidth: compact ? 170 : 220,
+          }}>
+          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{display}</span>
+          <i className={`ph ph-caret-${isOpen ? "up" : "down"}`}
+             style={{ fontSize: 11, color: c.fg2, flexShrink: 0 }} />
+        </button>
+        {isOpen && (
+          <div style={{
+            position: "absolute", bottom: "calc(100% + 8px)", right: 0,
+            background: "#fff", borderRadius: 10,
+            boxShadow: "0 8px 28px rgba(40,41,61,0.18)",
+            padding: 4, minWidth: rich ? 280 : 220, zIndex: 100,
+            maxHeight: 260, overflowY: "auto",
+          }}>
+            {options.map((opt, i) => {
+              const label = typeof opt === "string" ? opt : opt.label;
+              return (
+                <div key={i}
+                  onClick={() => { setSelectedProduct(label); setDropdownOpen(null); }}
+                  style={{
+                    display: "flex", alignItems: "center",
+                    padding: "8px 12px", cursor: "pointer",
+                    fontSize: 13, color: c.fg1, borderRadius: 6,
+                    transition: "background 100ms ease",
+                    gap: 10,
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.background = c.primaryLightest}
+                  onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+                >
+                  {rich && typeof opt !== "string" ? (
+                    <React.Fragment>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 13, fontWeight: 500, color: c.fg1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{opt.label}</div>
+                        <div style={{ fontSize: 11, color: c.fg3, marginTop: 2 }}>{opt.sub}</div>
+                      </div>
+                      <span style={{ fontSize: 12, color: c.fg2, fontWeight: 500, flexShrink: 0 }}>
+                        <span style={{ color: c.fg3 }}>$</span> {opt.price}
+                      </span>
+                    </React.Fragment>
+                  ) : (
+                    <span style={{ flex: 1 }}>{label}</span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // Botão de envio (arrow) com estado enabled/disabled.
+  //   • arrow=true → ícone seta pra direita (usado no WhatsApp com modelo
+  //     selecionado). Senão usa o paper-plane-tilt padrão.
+  const SendArrow = ({ disabled, arrow }) => (
+    <button disabled={disabled} aria-label="Enviar" style={{
+      width: 32, height: 32, borderRadius: "50%", border: 0,
+      background: disabled ? "#eef0f4" : c.primary,
+      color: disabled ? c.fg3 : "#fff",
+      cursor: disabled ? "not-allowed" : "pointer",
+      display: "inline-flex", alignItems: "center", justifyContent: "center",
+      boxShadow: disabled ? "none" : "0 2px 6px rgba(146,64,255,0.30)",
+    }}>
+      <i className={arrow ? "ph ph-arrow-right" : "ph ph-paper-plane-tilt"}
+         style={{ fontSize: arrow ? 16 : 15, fontWeight: arrow ? "bold" : "normal" }} />
+    </button>
+  );
+
+  // Microfone circular roxo (só WhatsApp Web).
+  const MicBtn = () => (
+    <button aria-label="Gravar áudio" style={{
+      width: 32, height: 32, borderRadius: "50%", border: 0,
+      background: c.primary, color: "#fff", cursor: "pointer",
+      display: "inline-flex", alignItems: "center", justifyContent: "center",
+      boxShadow: "0 2px 6px rgba(146,64,255,0.30)",
+    }}>
+      <i className="ph-fill ph-microphone" style={{ fontSize: 14 }} />
+    </button>
+  );
+
+  // Botão de "salvar" da Nota interna — quadrado laranja com check.
+  //   • disabled=true (input vazio): amarelo suave (opacity 0.5)
+  //   • disabled=false: laranja saturado, sombra sutil
+  const NoteCheckBtn = ({ disabled }) => (
+    <button disabled={disabled} aria-label="Salvar nota" style={{
+      width: 34, height: 34, borderRadius: 8, border: 0,
+      background: "#f5a623", color: "#fff",
+      cursor: disabled ? "not-allowed" : "pointer",
+      opacity: disabled ? 0.5 : 1,
+      display: "inline-flex", alignItems: "center", justifyContent: "center",
+      boxShadow: disabled ? "none" : "0 2px 6px rgba(245,166,35,0.35)",
+      transition: "opacity 150ms ease, box-shadow 150ms ease",
+    }}>
+      <i className="ph ph-check" style={{ fontSize: 17, fontWeight: "bold" }} />
+    </button>
+  );
+
+  // Info de preço laranja com tooltip escuro (só RCS).
+  //   Hover no ícone laranja → tooltip explicando o modelo de cobrança
+  //   (janela de 24h com custo fixo). Aparece à esquerda-abaixo do ícone.
+  const PriceInfo = ({ price }) => {
+    const [tipOpen, setTipOpen] = React.useState(false);
+    return (
+      <span style={{
+        display: "inline-flex", alignItems: "center", gap: 4,
+        fontSize: 13, color: c.fg1, fontWeight: 500, position: "relative",
+      }}>
+        <span style={{ color: c.fg2 }}>$</span> {price}
+        <i className="ph-fill ph-info"
+          onMouseEnter={() => setTipOpen(true)}
+          onMouseLeave={() => setTipOpen(false)}
+          style={{ fontSize: 14, color: "#f5a623", cursor: "help" }} />
+        {tipOpen && (
+          <span style={{
+            position: "absolute", bottom: "calc(100% + 8px)", right: -8,
+            background: "#28293d", color: "#fff",
+            padding: "10px 12px", borderRadius: 6,
+            fontSize: 12, fontWeight: 500, lineHeight: 1.4,
+            width: 220, zIndex: 100,
+            boxShadow: "0 4px 12px rgba(40,41,61,0.24)",
+            fontFamily: "Montserrat, sans-serif",
+            pointerEvents: "none",
+          }}>
+            Abre uma janela de 24h para troca de mensagens com 1 custo fixo. A cobrança é feita por janela iniciada, a partir do envio da mensagem (não da resposta).
+          </span>
+        )}
+      </span>
+    );
+  };
+
+  // Contador puro (WhatsApp Web / RCS).
+  const CharCounter = ({ n }) => (
+    <span style={{ fontSize: 13, color: c.fg2, minWidth: 40, textAlign: "right" }}>{n}</span>
+  );
+  // Contador com limite (SMS).
+  const CharCounterLimit = ({ used, max }) => (
+    <span style={{ fontSize: 13, color: c.fg2, minWidth: 44, textAlign: "right" }}>{used}/{max}</span>
+  );
+
+  // ── Conteúdo (por canal) ───────────────────────────────────────────
+  //   background pode ser sobrescrito por canal (bege na Nota interna).
+  //   Começa com altura de 1 linha (~36px) e cresce até getMaxTextareaH().
+  const renderTextarea = (placeholder = "Digite sua mensagem...", bg = "#fff") => (
+    <textarea ref={textareaRef} value={text} onChange={e => setText(e.target.value)}
+      placeholder={placeholder}
+      rows={1}
+      style={{
+        // NÃO usa maxHeight CSS: quando o usuário arrasta o resize pra um
+        // valor grande, a CSS capava o crescimento. O JS (useLayoutEffect +
+        // startResize) já controla o cap com getMaxTextareaH() (~50% da
+        // seção) tanto no auto-resize quanto no manual.
+        width: "100%", minHeight: 36,
+        padding: "8px 20px",
+        border: 0, outline: "none", resize: "none",
+        background: bg,
+        fontSize: 13, lineHeight: "20px", color: c.fg1,
+        boxSizing: "border-box", overflowY: "auto",
+      }} />
+  );
+
+  // Badge do arquivo anexado (aparece acima do textarea quando houver).
+  const AttachedFileBadge = () => attachedFile ? (
+    <div style={{ padding: "8px 20px 0", background: "#fff" }}>
+      <span style={{
+        display: "inline-flex", alignItems: "center", gap: 6,
+        background: c.primaryLightest, color: c.primary,
+        border: `1px solid ${c.primaryLight}`,
+        borderRadius: 999, padding: "4px 6px 4px 10px",
+        fontSize: 11, fontWeight: 600, maxWidth: "100%",
+      }}>
+        <i className="ph ph-paperclip" style={{ fontSize: 12 }} />
+        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 240 }}>
+          {attachedFile}
+        </span>
+        <button onClick={() => setAttachedFile(null)} aria-label="Remover arquivo" style={{
+          width: 16, height: 16, border: 0, background: "transparent",
+          color: c.primary, cursor: "pointer", borderRadius: 4,
+          display: "inline-flex", alignItems: "center", justifyContent: "center",
+        }}><i className="ph ph-x" style={{ fontSize: 11 }} /></button>
+      </span>
+    </div>
+  ) : null;
+
+  // Banner de informação (topo de WhatsApp / Torpedo).
+  const InfoBanner = ({ children }) => (
+    <div style={{
+      padding: "14px 20px 8px", fontSize: 13, color: c.fg2, background: "#fff",
+    }}>
+      {children}
+    </div>
+  );
+
+  // Preview do template do WhatsApp — bordered box que "abraça" o texto
+  // (sem minHeight). O container preserva quebras de linha do mock com
+  // whiteSpace: pre-wrap e não deixa área branca sobrando embaixo.
+  const TemplatePreview = ({ text }) => (
+    <div style={{ padding: "12px 20px 0", background: "#fff" }}>
+      <div style={{
+        border: `1px solid ${c.border}`, borderRadius: 8,
+        padding: "12px 16px",
+        fontSize: 13, lineHeight: 1.6, color: c.fg1,
+        whiteSpace: "pre-wrap",
+        background: "#fff",
+      }}>
+        {text}
+      </div>
+    </div>
+  );
+
+  // Botão-texto com ícone roxo (usado para "Retirar modelo" e
+  // "Configurar Modelo" quando o template já foi selecionado).
+  const TextButton = ({ icon, children, onClick }) => (
+    <button onClick={onClick} style={{
+      display: "inline-flex", alignItems: "center", gap: 8,
+      background: "transparent", border: 0, cursor: "pointer",
+      height: 36, padding: "0 10px", borderRadius: 8,
+      color: c.primary, fontSize: 13, fontWeight: 600,
+    }}
+      onMouseEnter={e => e.currentTarget.style.background = c.primaryLightest}
+      onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+    >
+      <i className={`ph ${icon}`} style={{ fontSize: 16 }} />
+      {children}
+    </button>
+  );
+
+  // Dropdown "Selecionar modelo" — usado inline na action row do WhatsApp
+  //   (junto com produto + enviar). Se `flex: 1` no wrapper, ocupa o
+  //   espaço restante da linha. Abre PRA CIMA como o produto.
+  const [selectedModel, setSelectedModel] = React.useState(null);
+  const ModelSelector = () => {
+    const isOpen = dropdownOpen === "model";
+    return (
+      <div ref={dropdownWrapRef} style={{ position: "relative", flex: 1, minWidth: 0 }}>
+        <button
+          onClick={() => setDropdownOpen(o => o === "model" ? null : "model")}
+          style={{
+            width: "100%", height: 36, padding: "0 12px",
+            border: `1px solid ${c.border}`, borderRadius: 8,
+            background: "#fff", color: selectedModel ? c.fg1 : c.fg3,
+            display: "flex", alignItems: "center", justifyContent: "space-between",
+            fontSize: 13, fontWeight: 500, cursor: "pointer",
+          }}>
+          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {selectedModel || "Selecionar modelo"}
+          </span>
+          <i className={`ph ph-caret-${isOpen ? "up" : "down"}`}
+             style={{ fontSize: 13, color: c.fg2, flexShrink: 0, marginLeft: 8 }} />
+        </button>
+        {isOpen && (
+          <div
+            style={{
+              position: "absolute", bottom: "calc(100% + 4px)", left: 0, right: 0,
+              background: "#fff", borderRadius: 8,
+              boxShadow: "0 8px 28px rgba(40,41,61,0.18)",
+              padding: 4, zIndex: 100,
+              maxHeight: 280, overflowY: "auto",
+            }}>
+            {WHATSAPP_MODELS.map((m, i) => (
+              <div key={i}
+                onClick={() => { setSelectedModel(m); setDropdownOpen(null); }}
+                style={{
+                  padding: "8px 12px", cursor: "pointer",
+                  fontSize: 13, color: c.fg1, borderRadius: 6,
+                  transition: "background 100ms ease",
+                }}
+                onMouseEnter={e => e.currentTarget.style.background = c.primaryLightest}
+                onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+              >
+                {m}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // Dropzone (Torpedo de voz).
+  //   • Ícone oficial (file-input-drop-area.png / file-input-drop-area-selected.png)
+  //     baixado direto do app.vonex.ai. Fica rotacionado 8° como no original.
+  //   • Hover: bg secundary lightest + borda sólida secundary + ícone
+  //     na variante "selected" (a que fica em cima da área azul).
+  //   • Área inteira é clicável via <input type="file" accept="audio/wav">
+  //     absoluto com opacity 0. Assim o browser mostra a tooltip nativa
+  //     "Nenhum arquivo escolhido" ao passar o mouse (comportamento
+  //     idêntico ao app real, que também usa <input type="file">).
+  const AudioDropzone = () => {
+    const [dzHover, setDzHover] = React.useState(false);
+    const [dzFile, setDzFile] = React.useState(null);
+    const dropBg = dzHover ? c.secundaryLightest : "#fff";
+    const borderColor = dzHover ? c.secundaryPure : c.primary;
+    const borderStyle = dzHover ? "solid" : "dashed";
+    const iconSrc = dzHover
+      ? "design-system/assets/icons/file-input-drop-area-selected.png"
+      : "design-system/assets/icons/file-input-drop-area.png";
+    return (
+      <div style={{ padding: "6px 20px 12px", background: "#fff" }}>
+        <div
+          onMouseEnter={() => setDzHover(true)}
+          onMouseLeave={() => setDzHover(false)}
+          style={{
+            position: "relative",
+            border: `1.5px ${borderStyle} ${borderColor}`,
+            borderRadius: 12,
+            padding: "36px 20px", textAlign: "center",
+            display: "flex", alignItems: "center", justifyContent: "center", gap: 14,
+            background: dropBg,
+            transition: "background 150ms ease, border-color 150ms ease",
+            cursor: "pointer",
+          }}>
+          <img
+            src={iconSrc} alt=""
+            style={{
+              width: 38, height: 38, transform: "rotate(8deg)",
+              flexShrink: 0, pointerEvents: "none",
+            }} />
+          <div style={{ textAlign: "left", pointerEvents: "none" }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: dzHover ? c.secundaryMedium : c.primary }}>
+              {dzFile ? dzFile : "Solte o arquivo aqui ou clique para escolher da sua biblioteca."}
+            </div>
+            <div style={{ fontSize: 11, color: c.fg3, marginTop: 4 }}>
+              .WAV (300kb)
+            </div>
+          </div>
+          {/* Input de arquivo absoluto — invisível mas clicável. O browser
+              mostra sua tooltip nativa ("Nenhum arquivo escolhido") no hover. */}
+          <input
+            type="file" accept="audio/wav"
+            onChange={e => {
+              const f = e.target.files?.[0];
+              if (f) setDzFile(f.name);
+              e.target.value = "";
+            }}
+            style={{
+              position: "absolute", inset: 0, opacity: 0, cursor: "pointer",
+              width: "100%", height: "100%",
+            }}
+          />
+        </div>
+      </div>
+    );
+  };
+
+  // ── Renderização por canal ────────────────────────────────────────
+  let content, leftActions, rightActions;
+
+  // Só as abas com <textarea> (campo de digitação livre) têm o handle de
+  // resize. WhatsApp usa template/preview e Torpedo usa dropzone de áudio —
+  // não há o que redimensionar, então não mostram o handle.
+  const hasTextarea = channel === CH.WHATSAPP_WEB || channel === CH.RCS
+    || channel === CH.SMS || channel === CH.EMAIL || channel === CH.NOTA;
+
+  if (channel === CH.WHATSAPP) {
+    if (selectedModel) {
+      // Estado: modelo selecionado → mostra preview do template e ações
+      // "Retirar modelo" / "Configurar Modelo" na esquerda. Botão de
+      // enviar fica ativo (seta roxa pra direita).
+      content = <TemplatePreview text={TEMPLATE_MESSAGE} />;
+      leftActions = (
+        <React.Fragment>
+          <TextButton icon="ph-thumbs-down" onClick={() => setSelectedModel(null)}>
+            Retirar modelo
+          </TextButton>
+          <TextButton icon="ph-gear-six">
+            Configurar Modelo
+          </TextButton>
+        </React.Fragment>
+      );
+      rightActions = (
+        <React.Fragment>
+          <PriceInfo price="R$ 0,5388" />
+          <CharCounter n={TEMPLATE_MESSAGE.length} />
+          <SendArrow arrow />
+        </React.Fragment>
+      );
+    } else {
+      content = (
+        <InfoBanner>
+          O uso de um modelo de mensagem aprovado pela Meta é obrigatório apenas para contatos que não tenha conversado nas últimas 24 horas.
+        </InfoBanner>
+      );
+      // ModelSelector fica na leftActions com flex:1 pra ocupar o espaço
+      // e ficar na mesma linha que Produto + Enviar (menos altura vertical).
+      leftActions = <ModelSelector />;
+      rightActions = (
+        <React.Fragment>
+          <ProductDropdown placeholder="Selecione o prod..." compact rich options={PRODUCTS_WHATSAPP} />
+          <SendArrow disabled />
+        </React.Fragment>
+      );
+    }
+  } else if (channel === CH.WHATSAPP_WEB) {
+    content = (<React.Fragment><AttachedFileBadge />{renderTextarea()}</React.Fragment>);
+    leftActions = (
+      <React.Fragment>
+        <PlusBtn extended />
+        <Divider />
+        <EmojiBtn />
+      </React.Fragment>
+    );
+    rightActions = (
+      <React.Fragment>
+        <ProductDropdown placeholder="Selecione o produto" rich options={PRODUCTS_WHATSAPP} />
+        <CharCounter n={4096 - text.length} />
+        <MicBtn />
+      </React.Fragment>
+    );
+  } else if (channel === CH.RCS) {
+    content = (<React.Fragment><AttachedFileBadge />{renderTextarea()}</React.Fragment>);
+    leftActions = (
+      <React.Fragment>
+        <PlusBtn />
+        <EmojiBtn />
+      </React.Fragment>
+    );
+    rightActions = (
+      <React.Fragment>
+        <ProductDropdown placeholder="Agente Conversacional" options={["Agente Conversacional"]} />
+        <PriceInfo price="R$ 0,09" />
+        <CharCounter n={5000 - text.length} />
+        <SendArrow disabled={!text.trim()} />
+      </React.Fragment>
+    );
+  } else if (channel === CH.SMS) {
+    content = (<React.Fragment><AttachedFileBadge />{renderTextarea()}</React.Fragment>);
+    leftActions = (<PlusBtn />);
+    rightActions = (
+      <React.Fragment>
+        <ProductDropdown placeholder="Selecione o produto" options={PRODUCTS_SMS} />
+        <CharCounterLimit used={text.length} max={160} />
+        <SendArrow disabled={!text.trim()} />
+      </React.Fragment>
+    );
+  } else if (channel === CH.EMAIL) {
+    // Email — layout com Destinatários Cc, toggle Editor de Texto/HTML,
+    // campo de assunto, textarea com toolbar rich text.
+    const EmailToolbarBtn = ({ icon, label, bold }) => (
+      <button aria-label={label} style={{
+        width: 28, height: 28, borderRadius: 4, border: 0,
+        background: "transparent", color: c.fg2, cursor: "pointer",
+        display: "inline-flex", alignItems: "center", justifyContent: "center",
+        fontWeight: bold ? 700 : 400,
+      }}
+        onMouseEnter={e => e.currentTarget.style.background = c.canvas}
+        onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+      >
+        {icon ? <i className={`ph ${icon}`} style={{ fontSize: 15 }} /> :
+          <span style={{ fontSize: 14, fontWeight: bold ? 800 : 500 }}>{label}</span>}
+      </button>
+    );
+
+    content = (
+      <React.Fragment>
+        {/* Destinatários Cc */}
+        <div style={{ padding: "10px 20px 0", background: "#fff" }}>
+          <input
+            value={emailCc} onChange={e => setEmailCc(e.target.value)}
+            placeholder="Destinatários Cc"
+            style={{
+              width: "100%", border: `1px solid ${c.border}`, borderRadius: 8,
+              padding: "10px 14px", fontSize: 13, color: c.fg1,
+              outline: "none", background: "#fff", boxSizing: "border-box",
+            }}
+            onFocus={e => e.currentTarget.style.borderColor = c.primary}
+            onBlur={e => e.currentTarget.style.borderColor = c.border}
+          />
+        </div>
+
+        {/* Toggle Editor de Texto / HTML + expand */}
+        <div style={{
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          padding: "10px 20px 0", background: "#fff",
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+            {["Editor de Texto", "HTML"].map(mode => (
+              <label key={mode} style={{
+                display: "inline-flex", alignItems: "center", gap: 6,
+                cursor: "pointer", fontSize: 13, fontWeight: 500,
+                color: emailEditorMode === (mode === "Editor de Texto" ? "texto" : "html") ? c.fg1 : c.fg2,
+              }}>
+                <span style={{
+                  width: 16, height: 16, borderRadius: "50%",
+                  border: `2px solid ${emailEditorMode === (mode === "Editor de Texto" ? "texto" : "html") ? c.primary : c.borderSoft}`,
+                  display: "inline-flex", alignItems: "center", justifyContent: "center",
+                }}>
+                  {emailEditorMode === (mode === "Editor de Texto" ? "texto" : "html") && (
+                    <span style={{
+                      width: 8, height: 8, borderRadius: "50%", background: c.primary,
+                    }} />
+                  )}
+                </span>
+                {mode}
+                <input type="radio" name="email-editor" value={mode}
+                  checked={emailEditorMode === (mode === "Editor de Texto" ? "texto" : "html")}
+                  onChange={() => setEmailEditorMode(mode === "Editor de Texto" ? "texto" : "html")}
+                  style={{ display: "none" }}
+                />
+              </label>
+            ))}
+          </div>
+          <button
+            onClick={() => setEmailExpanded(x => !x)}
+            aria-label="Expandir editor"
+            style={{
+              width: 28, height: 28, borderRadius: 6, border: 0,
+              background: "transparent", color: c.fg2, cursor: "pointer",
+              display: "inline-flex", alignItems: "center", justifyContent: "center",
+            }}
+            onMouseEnter={e => e.currentTarget.style.color = c.primary}
+            onMouseLeave={e => e.currentTarget.style.color = c.fg2}
+          >
+            <i className={`ph ${emailExpanded ? "ph-arrows-in" : "ph-arrows-out"}`} style={{ fontSize: 15 }} />
+          </button>
+        </div>
+
+        {/* Assunto */}
+        <div style={{ padding: "10px 20px 0", background: "#fff" }}>
+          <input
+            value={emailSubject} onChange={e => setEmailSubject(e.target.value)}
+            placeholder="Assunto"
+            style={{
+              width: "100%", border: 0, borderBottom: `1px solid ${c.border}`,
+              padding: "8px 0", fontSize: 13, color: c.fg1, fontWeight: 500,
+              outline: "none", background: "#fff", boxSizing: "border-box",
+            }}
+          />
+        </div>
+
+        {/* Textarea */}
+        <AttachedFileBadge />
+        {renderTextarea("Digite sua mensagem...")}
+
+        {/* Rich text toolbar + produto/preço/enviar na mesma linha */}
+        <div style={{
+          display: "flex", alignItems: "center",
+          padding: "4px 16px 8px", background: "#fff",
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 2, flex: 1, minWidth: 0 }}>
+            <PlusBtn />
+            <Divider />
+            <EmojiBtn />
+            <EmailToolbarBtn label="B" bold />
+            <EmailToolbarBtn label="I" />
+            <EmailToolbarBtn icon="ph-strikethrough" label="Tachado" />
+            <EmailToolbarBtn icon="ph-quotes" label="Citação" />
+            <EmailToolbarBtn label="H₁" />
+            <EmailToolbarBtn icon="ph-list-bullets" label="Lista" />
+            <EmailToolbarBtn icon="ph-list-numbers" label="Lista numerada" />
+            <EmailToolbarBtn icon="ph-image" label="Imagem" />
+            <EmailToolbarBtn icon="ph-paperclip" label="Anexo" />
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
+            <ProductDropdown placeholder="bruna" compact options={PRODUCTS_EMAIL} rich />
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 13, color: c.fg1, fontWeight: 500 }}>
+              <span style={{ color: c.fg2 }}>$</span> R$ 0,00
+            </span>
+            <SendArrow disabled={!text.trim()} />
+          </div>
+        </div>
+      </React.Fragment>
+    );
+    leftActions = null;
+    rightActions = null;
+  } else if (channel === CH.TORPEDO) {
+    content = (
+      <React.Fragment>
+        <InfoBanner>
+          O arquivo de torpedo pode ter o limite de até 30 segundos.
+        </InfoBanner>
+        <AudioDropzone />
+      </React.Fragment>
+    );
+    leftActions = null;
+    rightActions = (
+      <React.Fragment>
+        <ProductDropdown placeholder="Selecione o produto" options={PRODUCTS_TORPEDO} />
+        <SendArrow disabled />
+      </React.Fragment>
+    );
+  } else { // Nota interna
+    // Textarea bege (#fdf3d5) e placeholder "Digite seu comentário.."
+    // seguindo a spec da print. Botão check laranja disabled quando vazio.
+    content = (
+      <React.Fragment>
+        <AttachedFileBadge />
+        {renderTextarea("Digite seu comentário..", "#fdf3d5")}
+      </React.Fragment>
+    );
+    leftActions = (
+      <React.Fragment>
+        <PlusBtn />
+        <EmojiBtn />
+      </React.Fragment>
+    );
+    rightActions = (
+      <React.Fragment>
+        <CharCounter n={4096 - text.length} />
+        <NoteCheckBtn disabled={!text.trim()} />
+      </React.Fragment>
+    );
+  }
+
+  // Bezier com overshoot suave — sobe/desce com uma bouncinha agradável.
+  const BOUNCE = "cubic-bezier(0.34, 1.56, 0.64, 1)";
+  const DURATION = "480ms";
+  return (
+    <div
+      ref={outerRef}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => {
+        setHovered(false);
+        // Reseta a altura manual só quando NÃO está arrastando: durante um
+        // arrasto pra cima o mouse cruza pra fora transitoriamente e não
+        // pode zerar o resize. Vale pinado ou não (pin mantém aberto; a
+        // altura volta ao auto ao sair o mouse — conforme especificado).
+        if (!dragging) setTextareaH(null);
+      }}
+      onFocus={() => setFocused(true)}
+      onBlur={e => {
+        if (!e.currentTarget.contains(e.relatedTarget)) setFocused(false);
+      }}
+    >
+      {/* Tabs ficam FORA do container branco pra deixar a textura amarela
+          do thread aparecer atrás das orelinhas inativas. */}
+      {renderTabs()}
+      {/* Corpo colapsável — max-height animada devolve o espaço ao thread e
+          translateY(100%) dá o efeito de "subir de baixo". Ambos com o
+          mesmo BOUNCE pra ficarem sincronizados. Overflow vira `visible`
+          depois que abre, pra dropdowns e popovers não serem cortados. */}
+      <div style={{
+        overflow: clip ? "hidden" : "visible",
+        maxHeight: composerOpen ? "60vh" : 0,
+        // Sem animação de max-height quando o pin fixa OU quando o usuário
+        // está arrastando o resize — a transição atrapalha o feedback direto.
+        transition: (pinned || dragging) ? "none" : `max-height ${DURATION} ${BOUNCE}`,
+      }}>
+        <div style={{
+          background: "#fff",
+          transform: composerOpen ? "translateY(0)" : "translateY(100%)",
+          transition: (pinned || dragging) ? "none" : `transform ${DURATION} ${BOUNCE}`,
+        }}>
+          {/* Handle de resize no topo do body — só nas abas com textarea.
+              Arraste vertical redimensiona o textarea; se cair abaixo do
+              RESIZE_MIN, volta ao auto-resize (e desafixa se pinned).
+              Área de toque alta (20px) com grip fino centralizado, pra
+              ser fácil de acertar. */}
+          {hasTextarea && (
+            <div
+              onMouseDown={startResize}
+              style={{
+                height: 16, cursor: "ns-resize",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                background: "#fff",
+                userSelect: "none", touchAction: "none",
+              }}
+              onMouseEnter={e => {
+                const bar = e.currentTarget.firstChild;
+                if (bar) bar.style.background = c.primary;
+              }}
+              onMouseLeave={e => {
+                const bar = e.currentTarget.firstChild;
+                if (bar) bar.style.background = c.borderSoft;
+              }}
+            >
+              <div style={{
+                width: 44, height: 4, borderRadius: 2,
+                background: c.borderSoft,
+                transition: "background 150ms ease",
+                pointerEvents: "none",
+              }} />
+            </div>
+          )}
+          {content}
+          {(leftActions || rightActions) && (
+          <div style={{
+            display: "flex", alignItems: "center",
+            padding: "10px 16px 14px", gap: 12,
+          }}>
+            {/* leftActions cresce (flex:1) pra o ModelSelector do WhatsApp
+                ocupar a linha; nos outros canais só encosta à esquerda. */}
+            <div style={{ display: "flex", alignItems: "center", gap: 4, flex: 1, minWidth: 0 }}>
+              {leftActions}
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
+              {rightActions}
+            </div>
+          </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ─────────────────────────────────────────────────────────────────────
+// Página — sub-header + thread + StandaloneComposer
+// ─────────────────────────────────────────────────────────────────────
+const Page = () => {
+  const c = window.CCM.c;
+  const D = window.CCM_DATA;
+
+  const at = (D.atendimentos || []).find(a => a.id === "100501");
+  const conv = at?.conversas?.[0];
+  const contact = at?.contatos?.[0];
+  const attendant = at?.atendentes?.[0] || D.attendant;
+
+  const [channel, setChannel] = React.useState(CH.WHATSAPP);
+  const scrollRef = React.useRef(null);
+
+  React.useEffect(() => {
+    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+  }, []);
+
+  if (!conv || !contact) {
+    return <div style={{ padding: 40 }}>Conversa de exemplo não encontrada.</div>;
+  }
+
+  return (
+    <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, minHeight: 0 }}>
+      {/* sub-header — igual ao do ConversaPanel, simplificado */}
+      <div style={{
+        height: 56, padding: "0 16px",
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        borderBottom: `1px solid ${c.border}`, background: "#fff", flexShrink: 0,
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <i className="ph ph-chats-circle" style={{ fontSize: 16, color: c.fg2 }} />
+          <span style={{ fontSize: 13, fontWeight: 600, color: c.fg1 }}>{conv.id}</span>
+          <span style={{
+            display: "inline-flex", alignItems: "center", gap: 4,
+            background: "#fce4ee", color: "#dd2e77",
+            fontSize: 11, fontWeight: 600, padding: "3px 10px", borderRadius: 999,
+            marginLeft: 6,
+          }}>
+            Pagamento
+          </span>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <button aria-label="Vincular conversa a outro atendimento" style={{
+            width: 32, height: 32, borderRadius: 8, border: 0, background: "transparent",
+            color: c.fg2, cursor: "pointer",
+            display: "inline-flex", alignItems: "center", justifyContent: "center",
+          }}><i className="ph ph-link-simple" style={{ fontSize: 16 }} /></button>
+          <button aria-label="Ver dados do contato" style={{
+            width: 32, height: 32, borderRadius: 8, border: 0, background: "transparent",
+            color: c.fg2, cursor: "pointer",
+            display: "inline-flex", alignItems: "center", justifyContent: "center",
+          }}><i className="ph ph-user" style={{ fontSize: 16 }} /></button>
+          <button aria-label="Alterar fila" style={{
+            width: 32, height: 32, borderRadius: 8, border: 0, background: "transparent",
+            color: c.fg2, cursor: "pointer",
+            display: "inline-flex", alignItems: "center", justifyContent: "center",
+          }}><i className="ph ph-clipboard-text" style={{ fontSize: 16 }} /></button>
+          <button aria-label="Finalizar conversa" style={{
+            width: 32, height: 32, borderRadius: 8, border: 0,
+            background: c.successPure, color: "#fff", cursor: "pointer", marginLeft: 4,
+            display: "inline-flex", alignItems: "center", justifyContent: "center",
+          }}><i className="ph-fill ph-check" style={{ fontSize: 16 }} /></button>
+          <button aria-label="Expandir" style={{
+            width: 32, height: 32, borderRadius: 8, border: 0, background: "transparent",
+            color: c.fg2, cursor: "pointer",
+            display: "inline-flex", alignItems: "center", justifyContent: "center",
+          }}><i className="ph ph-arrows-out" style={{ fontSize: 16 }} /></button>
+        </div>
+      </div>
+
+      {/* thread — reusa MessageBubble/DayChip do projeto principal */}
+      <div ref={scrollRef} style={{
+        flex: 1, overflowY: "auto",
+        padding: "20px 32px",
+        backgroundImage: "url('design-system/assets/backgrounds/bg-chat.svg')",
+        backgroundColor: "#FAF6EE",
+        backgroundRepeat: "repeat",
+        backgroundAttachment: "fixed",
+        display: "flex", flexDirection: "column", gap: 14,
+      }}>
+        {window.DayChip && <window.DayChip text="Hoje" />}
+        {(conv.messages || []).map(m => (
+          window.MessageBubble
+            ? <window.MessageBubble key={m.id} msg={m} contact={contact} attendant={attendant} />
+            : null
+        ))}
+      </div>
+
+      <StandaloneComposer channel={channel} onChannelChange={setChannel} />
+    </div>
+  );
+};
+
+ReactDOM.createRoot(document.getElementById("root")).render(<Page />);
+</script>
+</body>
+</html>

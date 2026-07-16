@@ -20,7 +20,8 @@ Caminhos abreviados:
 | React | Angular | Seletor / caminho |
 |---|---|---|
 | `App` (root) | `AppComponent` + `RouterOutlet`; área Chat = `ChatOneToOneComponent` | `<app-chat-one-to-one>` · `c1o1/chat-one-to-one.component.ts` |
-| `Rail` / `RailIcon` | navegação lateral (no ngx-ccm a principal é o `HeaderComponent`); itens → rotas | — |
+| (layout multi-drawer) | `ChatCentralDrawersComponent` | `<app-chat-central-drawers>` · `c1o1/components/chat-central-drawers/` — layout de 4 drawers gerenciado pelo `DrawerStateManager` (1º=talks 268px, 2º=folders 327px, 3º=chat auto, 4º=journey 268px) |
+| `Rail` / `RailIcon` | `ChatSidebarComponent` (**standalone**) | `<app-chat-sidebar>` · `c1o1/components/chat-sidebar/` |
 | `PeekOverlay` | overlay/drawer lateral (Angular CDK Overlay ou `mat-drawer`) | tema `@theme/css/material-drawer.scss` |
 | `renderContent()` | troca de rota: `/atendimentos`, `/conversas`, automação, dashboard | rotas do `c1o1` + `@modules/automation` |
 
@@ -115,7 +116,7 @@ Módulos `c1o1` (orquestra) + `chat` (motor de mensagens).
 | sub-header da conversa | `ChatOneToOneHeaderComponent` | `<app-chat-one-to-one-header>` · `chat/components/chat-headers/chat-one-to-one-header/` |
 | área da thread | `ChatCoreComponent` | `<app-chat-core>` · `chat/components/chat-core/` |
 | `MessageBubble` | `ChatMessageComponent` → `MessageTypeRouterComponent` | `<app-chat-message>`, `<app-message-type-router>` · `chat/components/chat-message/` |
-| (tipos de msg) | `TextMessage` / `Image` / `Audio` / `Document` / `Video` / `Html` / `Whatsapp`-message | `<app-text-message>`, `<app-image-message>`, `<app-audio-message>`, `<app-document-message>`, `<app-video-message>`, `<app-html-message>`, `<app-whatsapp-message>` |
+| (tipos de msg) | `TextMessage` / `Image` / `Audio` / `Document` / `Video` / `Html` / `Whatsapp`-message / `Sticker` / `WhatsappInteractive` / `RcsCarousel` / `ChatNote` | `<app-text-message>`, `<app-image-message>`, `<app-audio-message>`, `<app-document-message>`, `<app-video-message>`, `<app-html-message>`, `<app-whatsapp-message>`, `<app-sticker-message>`, `<app-whatsapp-interactive-message>`, `<app-rcs-carousel-message>`, `<app-chat-note>` |
 | rodapé da msg (hora/canal) | `MessageFooterComponent` | `<app-message-footer>` |
 | `Composer` | `ChatInputRouterComponent` | `<app-chat-input-router>` · `chat/components/chat-input-router/` |
 | `MarcadoresChipStrip` / popover | `ChatAttendanceMarkersSelectionComponent` + `ChatMarkersModalComponent` | `<app-chat-attendance-markers-selection>` · `chat/components/...`; `<app-chat-markers-modal>` · `chat/modals/chat-markers-modal/` |
@@ -123,6 +124,17 @@ Módulos `c1o1` (orquestra) + `chat` (motor de mensagens).
 | `FinalizarConversaModal` | MatDialog de confirmação (encerrar) | — |
 | `ContactInfoPopover` | popover de metadados | `.chat-metadata-popover` (`popover.scss`) |
 | `DayChip` / `ToolbarBtn` | helpers visuais (chip de data / botão-ícone) | — |
+
+### Toolbar da conversa — visibilidade condicional
+
+Os botões de ação da toolbar (vincular, contato, finalizar) são **ocultados** quando
+a aba ativa é "Contato" ou "Histórico". Apenas o título da conversa e o botão
+expandir/recolher ficam visíveis nessas abas. O botão "Alterar fila / atendente"
+**foi removido** desta toolbar — agora vive na barra do atendimento (ver seção
+`AtendimentoDetail.jsx` abaixo).
+
+No Angular, essa lógica condicional deve ser implementada no
+`ChatOneToOneHeaderComponent` usando `*ngIf` ou `[hidden]` baseado na aba ativa.
 
 ### Composer multicanal (abas → componente por canal)
 
@@ -157,6 +169,14 @@ de abas é responsabilidade do `ChatInputRouterComponent`.
 | `MarcadoresPopover` | `ChatAttendanceMarkersSelectionComponent` | `<app-chat-attendance-markers-selection>` |
 | `StatusDropdown` | `ChatTicketStatusComponent` | `<app-chat-ticket-status>` |
 | `ContatoSidePanel` | `mat-drawer` (dados do contato) | `material-drawer.scss` |
+| Botão "Alterar fila / atendente" (ícone `ph-clipboard-text`, 32×32) | `TicketAssignmentModalComponent` (trigger) | na barra do atendimento, **não** na barra da conversa |
+
+> **Mudança recente:** o botão "Alterar fila / atendente" foi movido da barra da
+> conversa (`ConversaPanel.jsx`) para a barra do atendimento (`AtendimentoDetail.jsx`).
+> O badge amarelo da fila com SLA que existia anteriormente foi substituído por um
+> botão-ícone simples (32×32, borda `c.border`, ícone `ph-clipboard-text`). No Angular,
+> o trigger do `TicketAssignmentModalComponent` deve estar no header do atendimento
+> (`ChatTicketsDashboardComponent`), não no `ChatOneToOneHeaderComponent`.
 
 ---
 
