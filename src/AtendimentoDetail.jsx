@@ -198,19 +198,12 @@ const AtendimentoDetail = ({
               }}
               aria-label="Contatos do atendimento"
               style={{
-                display: "flex", alignItems: "center", gap: 6,
                 cursor: "pointer", padding: "2px 4px", borderRadius: 8,
                 transition: "background 120ms ease",
               }}
               onMouseEnter={e => e.currentTarget.style.background = c.borderSoft}
               onMouseLeave={e => e.currentTarget.style.background = "transparent"}
             >
-              <span style={{
-                width: 28, height: 28, borderRadius: "50%",
-                background: c.secundaryLightest, color: c.secundaryMedium,
-                fontSize: 11, fontWeight: 700,
-                display: "flex", alignItems: "center", justifyContent: "center",
-              }}>{a.contatos.length}</span>
               <AvatarStackHeader list={a.contatos} />
             </div>
           </CCMTooltip>
@@ -235,14 +228,21 @@ const AtendimentoDetail = ({
           </CCMTooltip>
           <CCMTooltip label="Alterar fila / atendente">
             <button onClick={() => setAlterarFilaOpen(true)} aria-label="Alterar fila / atendente" style={{
-              width: 32, height: 32, borderRadius: 8, border: `1px solid ${c.border}`,
-              background: "#fff", color: c.fg2, cursor: "pointer",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              transition: "background 120ms ease, color 120ms ease, border-color 120ms ease",
+              height: 30, padding: "0 12px", borderRadius: 999,
+              border: `1px solid #f0d98a`,
+              background: "#fef2d0", color: "#1f2b3d", cursor: "pointer",
+              display: "inline-flex", alignItems: "center", gap: 6,
+              fontFamily: "Montserrat, sans-serif",
+              fontSize: 12, fontWeight: 600,
+              transition: "filter 120ms ease",
+              maxWidth: 220,
             }}
-              onMouseEnter={e => { e.currentTarget.style.background = c.primaryLightest; e.currentTarget.style.color = c.primary; e.currentTarget.style.borderColor = c.primary; }}
-              onMouseLeave={e => { e.currentTarget.style.background = "#fff"; e.currentTarget.style.color = c.fg2; e.currentTarget.style.borderColor = c.border; }}
-            ><i className="ph ph-clipboard-text" style={{ fontSize: 16 }} /></button>
+              onMouseEnter={e => e.currentTarget.style.filter = "brightness(0.97)"}
+              onMouseLeave={e => e.currentTarget.style.filter = "none"}
+            >
+              <i className="ph-fill ph-chart-bar" style={{ fontSize: 14, color: "#1f2b3d" }} />
+              <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{currentFila}</span>
+            </button>
           </CCMTooltip>
           {/* Status pill clicável — abre o mesmo StatusDropdown da lista */}
           {(() => {
@@ -276,17 +276,6 @@ const AtendimentoDetail = ({
               </CCMTooltip>
             );
           })()}
-          <CCMTooltip label="Trazer conversa de outro atendimento">
-            <button onClick={() => setTrazerConversaOpen(true)} aria-label="Trazer conversa de outro atendimento" style={{
-              width: 32, height: 32, borderRadius: 8, border: `1px solid ${c.border}`,
-              background: "#fff", color: c.fg2, cursor: "pointer",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              transition: "background 120ms ease, color 120ms ease, border-color 120ms ease",
-            }}
-              onMouseEnter={e => { e.currentTarget.style.background = c.primaryLightest; e.currentTarget.style.color = c.primary; e.currentTarget.style.borderColor = c.primary; }}
-              onMouseLeave={e => { e.currentTarget.style.background = "#fff"; e.currentTarget.style.color = c.fg2; e.currentTarget.style.borderColor = c.border; }}
-            ><i className="ph ph-tray-arrow-down" style={{ fontSize: 16 }} /></button>
-          </CCMTooltip>
           <CCMTooltip label="Nova conversa">
             <button onClick={() => setNovaConversaOpen(true)} aria-label="Nova conversa" style={{
               width: 32, height: 32, borderRadius: "50%", border: 0,
